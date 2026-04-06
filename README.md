@@ -2,7 +2,7 @@
 Server-Client based integrity monitoring system
 
 # Members
-Kang jiwoon
-Kim juhwan
-Kim Taewoo
-Na Wonhyun
+Kang jiwoon  
+Kim juhwan  
+Kim Taewoo  
+Na Wonhyun  
