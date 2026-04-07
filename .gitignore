@@ -1,0 +1,32 @@
+# Go
+bin/
+*.exe
+*.out
+
+# C
+*.o
+*.a
+*.so
+*.dylib
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Claude
+.claude/
+
+# Misc
+*.pdf
