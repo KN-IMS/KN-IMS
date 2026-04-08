@@ -1,0 +1,23 @@
+[Unit]
+Description=FileGuard FIM Agent - File Integrity Monitor
+Documentation=https://github.com/KGU-FIMS/Agent
+After=network.target
+Wants=network.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/fim_agent -c /etc/fim_monitor/fim.conf
+Restart=on-failure
+RestartSec=5s
+WatchdogSec=30s
+TimeoutStopSec=10s
+User=root
+KillMode=process
+
+# 보안 강화
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/run /var/log
+
+[Install]
+WantedBy=multi-user.target

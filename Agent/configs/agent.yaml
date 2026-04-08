@@ -1,0 +1,56 @@
+# fim-agent 설정 파일
+# configs/agent.yaml
+
+# ── 데몬 설정 ──────────────────────────────────
+daemon:
+  daemonize: false
+  pid_file: /var/run/fim_monitor.pid
+
+# ── 로깅 ───────────────────────────────────────
+logging:
+  file: /var/log/fim_monitor.log
+  syslog: false
+  verbose: false
+
+# ── 실시간 감시 백엔드 ──────────────────────────
+realtime:
+  # fanotify: 마운트 포인트 전체 상시 감시 (root 필요)
+  fanotify:
+    enabled: false
+    watches:
+      - path: /tmp/fim_test/
+        mode: mount
+
+  # inotify: 특정 디렉토리 정밀 감시
+  inotify:
+    enabled: true
+    watches:
+      - path: /tmp/fim_test/critical/
+        recursive: true
+      - path: /tmp/fim_test/config/
+        recursive: false
+
+# ── 에이전트 자체 보호 ─────────────────────────
+protect:
+  - /usr/local/bin/fim_monitor
+  - /etc/fim_monitor/fim.conf
+
+# ── 베이스라인 스캔 (주기적) ───────────────────
+scanner:
+  enabled: false
+  interval_sec: 3600        # 1시간마다 전체 스캔
+  hash_algorithm: sha256
+  db_path: /var/lib/fim_monitor/baseline.db
+  scan_paths:
+    - path: /etc
+      recursive: true
+    - path: /usr/bin
+      recursive: false
+
+# ── 서버 전송 (gRPC) ───────────────────────────
+transport:
+  enabled: false
+  server_addr: "localhost:50051"
+  tls: false
+  retry_interval_sec: 5
+  buffer_size: 1024

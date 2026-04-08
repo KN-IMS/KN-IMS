@@ -1,0 +1,15 @@
+[Unit]
+Description=FIM Monitor — File Integrity Monitoring Agent
+After=network.target
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/fim_agent -f -c /etc/fim_monitor/fim.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+WatchdogSec=90s
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target
