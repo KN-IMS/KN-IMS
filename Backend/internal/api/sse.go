@@ -4,25 +4,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 
-	"github.com/gin-gonic/gin"
 	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/gin-gonic/gin"
 )
 
 // SSEPublisher : EventPublisher 인터페이스의 구현체
 type SSEPublisher struct {
-	clients map[chan internal.FileEvent]bool
+	mu      sync.RWMutex
+	clients map[chan internal.FileEvent]struct{}
 }
 
 // NewSSEPublisher : SSEPublisher 생성
 func NewSSEPublisher() *SSEPublisher {
 	return &SSEPublisher{
-		clients: make(map[chan internal.FileEvent]bool),
+		clients: make(map[chan internal.FileEvent]struct{}),
 	}
 }
 
 // Publish : 모든 구독자에게 이벤트 전송
 func (p *SSEPublisher) Publish(event internal.FileEvent) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	for ch := range p.clients {
 		select {
 		case ch <- event:
@@ -35,12 +40,17 @@ func (p *SSEPublisher) Publish(event internal.FileEvent) {
 // Subscribe : 새 구독 채널 생성
 func (p *SSEPublisher) Subscribe() <-chan internal.FileEvent {
 	ch := make(chan internal.FileEvent, 100)
-	p.clients[ch] = true
+	p.mu.Lock()
+	p.clients[ch] = struct{}{}
+	p.mu.Unlock()
 	return ch
 }
 
 // Unsubscribe : 구독 해제
 func (p *SSEPublisher) Unsubscribe(ch <-chan internal.FileEvent) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	for c := range p.clients {
 		if c == ch {
 			delete(p.clients, c)

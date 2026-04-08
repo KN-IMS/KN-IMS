@@ -3,8 +3,8 @@ package api
 import (
 	"log"
 
-	"github.com/gin-gonic/gin"
 	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/gin-gonic/gin"
 )
 
 // Server : REST API 서버
@@ -68,9 +68,7 @@ func (s *Server) registerRoutes() {
 }
 
 // Start : 서버 시작
-func (s *Server) Start(addr string) {
+func (s *Server) Start(addr string) error {
 	log.Printf("HTTP 서버 시작: %s", addr)
-	if err := s.router.Run(addr); err != nil {
-		log.Fatalf("서버 시작 실패: %v", err)
-	}
+	return s.router.Run(addr)
 }
