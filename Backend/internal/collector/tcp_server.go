@@ -17,7 +17,6 @@ type Server struct {
 	tlsCfg   *tls.Config
 	agents   internal.AgentStore
 	events   internal.EventStore
-	scans    internal.ScanStore
 	alerts   internal.AlertStore
 	pub      internal.EventPublisher
 	onEvent  func(ctx context.Context, agentID string, e internal.FileEvent)
@@ -30,7 +29,6 @@ func NewServer(
 	tlsCfg *tls.Config,
 	agents internal.AgentStore,
 	events internal.EventStore,
-	scans internal.ScanStore,
 	alerts internal.AlertStore,
 	pub internal.EventPublisher,
 	onEvent func(context.Context, string, internal.FileEvent),
@@ -40,7 +38,6 @@ func NewServer(
 		tlsCfg:  tlsCfg,
 		agents:  agents,
 		events:  events,
-		scans:   scans,
 		alerts:  alerts,
 		pub:     pub,
 		onEvent: onEvent,
@@ -81,7 +78,6 @@ func (s *Server) handleConn(conn *tls.Conn) {
 		conn:     conn,
 		agents:   s.agents,
 		events:   s.events,
-		scans:    s.scans,
 		alerts:   s.alerts,
 		pub:      s.pub,
 		onEvent:  s.onEvent,

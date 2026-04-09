@@ -1,248 +1,428 @@
+#define _POSIX_C_SOURCE 200809L
 #include "tcp_client.h"
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 #include <string.h>
-#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
 #include <syslog.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
-int tcp_client_connect(fim_tcp_client_t *c)
+static uint32_t next_seq(fim_tcp_client_t *cli)
 {
-    /* 1. TCP 소켓 생성 */
-    c->sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (c->sockfd < 0) {
-        syslog(LOG_ERR, "transport: 소켓 생성 실패");
-        return -1;
-    }
+    pthread_mutex_lock(&cli->seq_lock);
+    uint32_t seq = ++cli->seq_num;
+    pthread_mutex_unlock(&cli->seq_lock);
+    return seq;
+}
 
-    /* 2. 서버 주소 연결 */
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons((uint16_t)c->port);
-    if (inet_pton(AF_INET, c->host, &addr.sin_addr) != 1) {
-        syslog(LOG_ERR, "transport: 잘못된 서버 주소: %s", c->host);
-        close(c->sockfd);
+static int set_keepalive(int fd)
+{
+    int optval = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0)
         return -1;
-    }
-    if (connect(c->sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        syslog(LOG_WARNING, "transport: 연결 실패 (%s:%d)", c->host, c->port);
-        close(c->sockfd);
-        return -1;
-    }
 
-    /* 3. TLS 핸드셰이크 */
-    c->ssl = SSL_new(c->tls_ctx->ctx);
-    if (!c->ssl) {
-        syslog(LOG_ERR, "transport: SSL 객체 생성 실패");
-        close(c->sockfd);
+    int idle = FIM_KEEPALIVE_IDLE;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) < 0)
         return -1;
-    }
-    SSL_set_fd(c->ssl, c->sockfd);
 
-    if (SSL_connect(c->ssl) != 1) {
-        syslog(LOG_ERR, "transport: TLS 핸드셰이크 실패");
-        SSL_free(c->ssl);
-        c->ssl = NULL;
-        close(c->sockfd);
+    int interval = FIM_KEEPALIVE_INTERVAL;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval)) < 0)
         return -1;
-    }
 
-    c->connected = 1;
-    syslog(LOG_INFO, "transport: mTLS 연결 성공 (%s:%d)", c->host, c->port);
+    int count = FIM_KEEPALIVE_COUNT;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(count)) < 0)
+        return -1;
+
     return 0;
 }
 
-void tcp_client_reconnect_loop(fim_tcp_client_t *c)
+static int ssl_write_all(SSL *ssl, const uint8_t *buf, size_t len)
 {
-    int backoff = 1;
-    while (!c->connected) {
-        syslog(LOG_INFO, "transport: %d초 후 재연결 시도...", backoff);
-        sleep((unsigned int)backoff);
-        if (tcp_client_connect(c) == 0)
-            return;
-        backoff = (backoff * 2 > 60) ? 60 : backoff * 2;
-    }
-}
-
-void tcp_client_disconnect(fim_tcp_client_t *c)
-{
-    if (c->ssl) {
-        SSL_shutdown(c->ssl);
-        SSL_free(c->ssl);
-        c->ssl = NULL;
-    }
-    if (c->sockfd >= 0) {
-        close(c->sockfd);
-        c->sockfd = -1;
-    }
-    c->connected = 0;
-}
-
-int tcp_client_register(fim_tcp_client_t *c,
-                         const char *hostname,
-                         const char *ip,
-                         const char *version,
-                         const char *os,
-                         const char *monitor_type,
-                         char *out_agent_id,
-                         size_t id_size)
-{
-    /* REGISTER JSON 조립 */
-    char json[512];
-    snprintf(json, sizeof(json),
-        "{\"hostname\":\"%s\",\"ip\":\"%s\","
-        "\"version\":\"%s\",\"os\":\"%s\","
-        "\"monitor_type\":\"%s\"}",
-        hostname, ip, version, os, monitor_type);
-
-    if (fim_send_frame(c->ssl, FIM_MSG_REGISTER, json) < 0) {
-        syslog(LOG_ERR, "transport: REGISTER 전송 실패");
-        return -1;
-    }
-
-    /* RegisterAck 수신 → {"agent_id":"uuid"} */
-    uint8_t msg_type = 0;
-    char ack[256];
-    if (fim_recv_frame(c->ssl, &msg_type, ack, sizeof(ack)) < 0) {
-        syslog(LOG_ERR, "transport: RegisterAck 수신 실패");
-        return -1;
-    }
-
-    /* agent_id 파싱 (간단 파싱) */
-    const char *key = "\"agent_id\":\"";
-    char *start = strstr(ack, key);
-    if (!start) {
-        syslog(LOG_ERR, "transport: agent_id 파싱 실패: %s", ack);
-        return -1;
-    }
-    start += strlen(key);
-    char *end = strchr(start, '"');
-    if (!end) return -1;
-
-    size_t len = (size_t)(end - start);
-    if (len >= id_size) len = id_size - 1;
-    memcpy(out_agent_id, start, len);
-    out_agent_id[len] = '\0';
-
-    syslog(LOG_INFO, "transport: 등록 완료 (agent_id=%s)", out_agent_id);
-    return 0;
-}
-
-int tcp_client_send_event(fim_tcp_client_t *c,
-                           const char *agent_id,
-                           const fim_event_t *ev)
-{
-    if (!c->connected || !c->ssl) {
-        syslog(LOG_WARNING, "transport: 연결 없음 — 이벤트 전송 건너뜀");
-        return -1;
-    }
-
-    /* 이벤트 타입 변환 */
-    const char *evt_str = FIM_EVT_MODIFY;
-    switch (ev->type) {
-        case FIM_EVENT_CREATE: evt_str = FIM_EVT_CREATE; break;
-        case FIM_EVENT_MODIFY: evt_str = FIM_EVT_MODIFY; break;
-        case FIM_EVENT_DELETE: evt_str = FIM_EVT_DELETE; break;
-        case FIM_EVENT_ATTRIB: evt_str = FIM_EVT_ATTRIB; break;
-        case FIM_EVENT_MOVE:   evt_str = FIM_EVT_MOVE;   break;
-        default: break;
-    }
-
-    /* 탐지 소스 변환 */
-    const char *src_str = FIM_SRC_INOTIFY;
-
-    /* FILE_EVENT JSON 조립 (file_path 최대 4095 + 고정 필드 여유) */
-    char json[6144];
-    snprintf(json, sizeof(json),
-        "{\"agent_id\":\"%s\","
-        "\"event_type\":\"%s\","
-        "\"file_path\":\"%s\","
-        "\"file_name\":\"%s\","
-        "\"file_hash\":\"\","
-        "\"file_permission\":\"\","
-        "\"detected_by\":\"%s\","
-        "\"pid\":%d,"
-        "\"timestamp\":%ld}",
-        agent_id,
-        evt_str,
-        ev->path,
-        ev->filename,
-        src_str,
-        ev->pid,
-        (long)ev->timestamp);
-
-    if (fim_send_frame(c->ssl, FIM_MSG_FILE_EVENT, json) < 0) {
-        syslog(LOG_WARNING, "transport: FILE_EVENT 전송 실패 → 재연결");
-        c->connected = 0;
-        tcp_client_disconnect(c);
-        tcp_client_reconnect_loop(c);
-        return -1;
+    size_t sent = 0;
+    while (sent < len) {
+        int n = SSL_write(ssl, buf + sent, (int)(len - sent));
+        if (n <= 0) return -1;
+        sent += (size_t)n;
     }
     return 0;
 }
 
-int tcp_client_send_integrity_alert(fim_tcp_client_t *c,
-                                     const char *agent_id,
-                                     const fim_event_t *ev,
-                                     const char *expected_hash,
-                                     const char *actual_hash)
+static int ssl_read_all(SSL *ssl, uint8_t *buf, size_t len)
 {
-    if (!c->connected || !c->ssl) return -1;
-
-    char json[8192];
-    snprintf(json, sizeof(json),
-        "{\"agent_id\":\"%s\","
-        "\"event_type\":\"INTEGRITY_VIOLATION\","
-        "\"file_path\":\"%s\","
-        "\"file_name\":\"%s\","
-        "\"expected_hash\":\"%s\","
-        "\"actual_hash\":\"%s\","
-        "\"detected_by\":\"inotify\","
-        "\"pid\":%d,"
-        "\"timestamp\":%ld}",
-        agent_id,
-        ev->path,
-        ev->filename,
-        expected_hash ? expected_hash : "",
-        actual_hash   ? actual_hash   : "",
-        ev->pid,
-        (long)ev->timestamp);
-
-    if (fim_send_frame(c->ssl, FIM_MSG_FILE_EVENT, json) < 0) {
-        syslog(LOG_WARNING, "transport: INTEGRITY_ALERT 전송 실패");
-        c->connected = 0;
-        tcp_client_disconnect(c);
-        tcp_client_reconnect_loop(c);
-        return -1;
+    size_t received = 0;
+    while (received < len) {
+        int n = SSL_read(ssl, buf + received, (int)(len - received));
+        if (n <= 0) return -1;
+        received += (size_t)n;
     }
     return 0;
 }
 
-void *tcp_client_recv_loop(void *arg)
+static double apply_jitter(double base)
 {
-    fim_tcp_client_t *c = (fim_tcp_client_t *)arg;
+    double jitter = (double)(rand() % (FIM_RECONNECT_JITTER_PCT * 2) - FIM_RECONNECT_JITTER_PCT) / 100.0;
+    return base * (1.0 + jitter);
+}
 
-    while (c->connected) {
-        uint8_t msg_type = 0;
-        char buf[4096];
+static int fim_tcp_register_internal(fim_tcp_client_t *cli,
+                                     const char *hostname,
+                                     const char *ip_str,
+                                     uint8_t monitor_type,
+                                     const char *os,
+                                     char *agent_id_out,
+                                     size_t id_size)
+{
+    if (!cli || cli->state != FIM_CONN_CONNECTED) return -1;
 
-        if (fim_recv_frame(c->ssl, &msg_type, buf, sizeof(buf)) < 0) {
-            syslog(LOG_WARNING, "transport: 서버 연결 끊김 → 재연결");
-            c->connected = 0;
-            tcp_client_disconnect(c);
-            tcp_client_reconnect_loop(c);
-            continue;
+    struct in_addr addr;
+    if (inet_pton(AF_INET, ip_str, &addr) != 1) {
+        syslog(LOG_ERR, "fim-tcp: 잘못된 IP: %s", ip_str);
+        return -1;
+    }
+
+    fim_msg_register_t msg = {0};
+    msg.hostname_len = (uint16_t)strlen(hostname);
+    msg.hostname = (char *)hostname;
+    msg.ip = ntohl(addr.s_addr);
+    msg.monitor_type = monitor_type;
+    msg.os_len = (uint16_t)strlen(os);
+    msg.os = (char *)os;
+
+    uint8_t buf[1024];
+    int len = fim_register_encode(&msg, buf, sizeof(buf));
+    if (len < 0) {
+        syslog(LOG_ERR, "fim-tcp: REGISTER 직렬화 실패");
+        return -1;
+    }
+
+    if (fim_tcp_send_frame(cli, FIM_MSG_REGISTER, buf, (uint32_t)len) < 0) {
+        syslog(LOG_ERR, "fim-tcp: REGISTER 전송 실패");
+        return -1;
+    }
+
+    fim_frame_header_t hdr;
+    uint8_t *payload = NULL;
+    int plen = fim_tcp_recv_frame(cli, &hdr, &payload);
+    if (plen < 8 || hdr.type != FIM_MSG_REGISTER || !payload) {
+        syslog(LOG_ERR, "fim-tcp: REGISTER ACK 수신 실패 (plen=%d)", plen);
+        free(payload);
+        return -1;
+    }
+
+    const uint8_t *p = payload;
+    uint32_t hi;
+    uint32_t lo;
+    memcpy(&hi, p, 4);
+    hi = ntohl(hi);
+    memcpy(&lo, p + 4, 4);
+    lo = ntohl(lo);
+    cli->agent_id = ((uint64_t)hi << 32) | lo;
+    free(payload);
+
+    if (agent_id_out && id_size > 0) {
+        snprintf(agent_id_out, id_size, "%llu",
+                 (unsigned long long)cli->agent_id);
+    }
+
+    strncpy(cli->reg_hostname, hostname, sizeof(cli->reg_hostname) - 1);
+    strncpy(cli->reg_ip, ip_str, sizeof(cli->reg_ip) - 1);
+    strncpy(cli->reg_os, os, sizeof(cli->reg_os) - 1);
+    cli->reg_hostname[sizeof(cli->reg_hostname) - 1] = '\0';
+    cli->reg_ip[sizeof(cli->reg_ip) - 1] = '\0';
+    cli->reg_os[sizeof(cli->reg_os) - 1] = '\0';
+    cli->reg_monitor_type = monitor_type;
+    cli->reg_cached = 1;
+
+    syslog(LOG_INFO, "fim-tcp: 등록 완료 (agent_id=%llu)",
+           (unsigned long long)cli->agent_id);
+    return 0;
+}
+
+int fim_tcp_init(fim_tcp_client_t *cli, fim_tls_ctx_t *tls,
+                 const char *host, uint16_t port)
+{
+    if (!cli || !tls || !host) return -1;
+
+    memset(cli, 0, sizeof(*cli));
+    cli->fd = -1;
+    cli->tls = tls;
+    cli->state = FIM_CONN_DISCONNECTED;
+    cli->port = port;
+    strncpy(cli->host, host, sizeof(cli->host) - 1);
+    cli->host[sizeof(cli->host) - 1] = '\0';
+
+    pthread_mutex_init(&cli->seq_lock, NULL);
+    pthread_mutex_init(&cli->write_lock, NULL);
+
+    srand((unsigned)time(NULL));
+    return 0;
+}
+
+int fim_tcp_connect(fim_tcp_client_t *cli)
+{
+    if (!cli || !cli->tls) return -1;
+
+    struct addrinfo hints;
+    struct addrinfo *res = NULL;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    char port_str[8];
+    snprintf(port_str, sizeof(port_str), "%u", cli->port);
+
+    if (getaddrinfo(cli->host, port_str, &hints, &res) != 0) {
+        syslog(LOG_ERR, "fim-tcp: DNS 해석 실패: %s", cli->host);
+        return -1;
+    }
+
+    cli->fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (cli->fd < 0) {
+        syslog(LOG_ERR, "fim-tcp: 소켓 생성 실패: %s", strerror(errno));
+        freeaddrinfo(res);
+        return -1;
+    }
+
+    if (connect(cli->fd, res->ai_addr, res->ai_addrlen) < 0) {
+        syslog(LOG_ERR, "fim-tcp: 연결 실패: %s:%u (%s)",
+               cli->host, cli->port, strerror(errno));
+        close(cli->fd);
+        cli->fd = -1;
+        freeaddrinfo(res);
+        return -1;
+    }
+    freeaddrinfo(res);
+
+    if (set_keepalive(cli->fd) < 0)
+        syslog(LOG_WARNING, "fim-tcp: keepalive 설정 실패");
+
+    cli->ssl = fim_tls_wrap(cli->tls, cli->fd);
+    if (!cli->ssl) {
+        close(cli->fd);
+        cli->fd = -1;
+        return -1;
+    }
+
+    cli->state = FIM_CONN_CONNECTED;
+    cli->seq_num = 0;
+    cli->send_failures = 0;
+    syslog(LOG_INFO, "fim-tcp: 서버 연결 성공 %s:%u", cli->host, cli->port);
+    return 0;
+}
+
+void fim_tcp_disconnect(fim_tcp_client_t *cli)
+{
+    if (!cli) return;
+
+    if (cli->ssl) {
+        SSL_shutdown(cli->ssl);
+        SSL_free(cli->ssl);
+        cli->ssl = NULL;
+    }
+    if (cli->fd >= 0) {
+        close(cli->fd);
+        cli->fd = -1;
+    }
+    cli->state = FIM_CONN_DISCONNECTED;
+}
+
+int fim_tcp_reconnect(fim_tcp_client_t *cli)
+{
+    if (!cli) return -1;
+
+    fim_tcp_disconnect(cli);
+
+    double delay = FIM_RECONNECT_INIT_SEC;
+    for (int i = 0; i < FIM_RECONNECT_MAX_RETRIES; i++) {
+        double wait = apply_jitter(delay);
+        struct timespec ts;
+
+        syslog(LOG_INFO, "fim-tcp: 재연결 시도 %d/%d (%.1f초 후)",
+               i + 1, FIM_RECONNECT_MAX_RETRIES, wait);
+
+        ts.tv_sec = (time_t)wait;
+        ts.tv_nsec = (long)((wait - ts.tv_sec) * 1e9);
+        nanosleep(&ts, NULL);
+
+        if (fim_tcp_connect(cli) == 0) {
+            if (!cli->reg_cached ||
+                fim_tcp_register_internal(cli,
+                                          cli->reg_hostname,
+                                          cli->reg_ip,
+                                          cli->reg_monitor_type,
+                                          cli->reg_os,
+                                          NULL,
+                                          0) == 0) {
+                syslog(LOG_INFO, "fim-tcp: 재연결 성공 (시도 %d)", i + 1);
+                return 0;
+            }
+
+            syslog(LOG_WARNING, "fim-tcp: 재연결 후 재등록 실패");
+            fim_tcp_disconnect(cli);
         }
 
-        /* COMMAND 수신 처리 */
-        if (msg_type == FIM_MSG_COMMAND) {
-            syslog(LOG_INFO, "transport: COMMAND 수신 (무시): %s", buf);
-            /* 무결성 검사는 inotify MODIFY 이벤트 시 에이전트가 자동 수행.
-             * 서버 명령 기반 온디맨드 스캔은 지원하지 않음. */
+        delay *= FIM_RECONNECT_MULTIPLIER;
+        if (delay > FIM_RECONNECT_MAX_SEC)
+            delay = FIM_RECONNECT_MAX_SEC;
+    }
+
+    syslog(LOG_ERR, "fim-tcp: 재연결 실패 — 최대 시도 횟수 초과 (%d회)",
+           FIM_RECONNECT_MAX_RETRIES);
+    return -1;
+}
+
+int fim_tcp_send_frame(fim_tcp_client_t *cli, uint8_t type,
+                       const uint8_t *payload, uint32_t payload_len)
+{
+    if (!cli || cli->state != FIM_CONN_CONNECTED) return -1;
+    if (payload_len > FIM_MAX_FRAME_SIZE) return -1;
+
+    fim_frame_header_t hdr;
+    hdr.length = payload_len;
+    hdr.type = type;
+    hdr.seq_num = next_seq(cli);
+
+    uint8_t hdr_buf[FIM_FRAME_HEADER_SIZE];
+    fim_frame_header_encode(&hdr, hdr_buf);
+
+    pthread_mutex_lock(&cli->write_lock);
+
+    int ret = ssl_write_all(cli->ssl, hdr_buf, FIM_FRAME_HEADER_SIZE);
+    if (ret == 0 && payload_len > 0)
+        ret = ssl_write_all(cli->ssl, payload, payload_len);
+
+    pthread_mutex_unlock(&cli->write_lock);
+
+    if (ret < 0) {
+        cli->send_failures++;
+        syslog(LOG_ERR, "fim-tcp: 프레임 전송 실패 (type=0x%02x, 연속 %d회)",
+               type, cli->send_failures);
+
+        if (cli->send_failures >= FIM_SEND_MAX_RETRIES) {
+            syslog(LOG_WARNING, "fim-tcp: 전송 %d회 실패 — 재연결 시작",
+                   FIM_SEND_MAX_RETRIES);
+            cli->send_failures = 0;
+            return -2;
+        }
+        return -1;
+    }
+
+    cli->send_failures = 0;
+    return 0;
+}
+
+int fim_tcp_recv_frame(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
+                       uint8_t **payload)
+{
+    if (!cli || !hdr || !payload || cli->state != FIM_CONN_CONNECTED)
+        return -1;
+
+    *payload = NULL;
+
+    uint8_t hdr_buf[FIM_FRAME_HEADER_SIZE];
+    if (ssl_read_all(cli->ssl, hdr_buf, FIM_FRAME_HEADER_SIZE) < 0)
+        return -1;
+
+    fim_frame_header_decode(hdr_buf, hdr);
+
+    if (hdr->length > FIM_MAX_FRAME_SIZE) {
+        syslog(LOG_ERR, "fim-tcp: 프레임 크기 초과 (%u > %u)",
+               hdr->length, FIM_MAX_FRAME_SIZE);
+        return -1;
+    }
+
+    if (hdr->length > 0) {
+        *payload = malloc(hdr->length);
+        if (!*payload) return -1;
+
+        if (ssl_read_all(cli->ssl, *payload, hdr->length) < 0) {
+            free(*payload);
+            *payload = NULL;
+            return -1;
         }
     }
-    return NULL;
+
+    return (int)hdr->length;
+}
+
+void fim_tcp_free(fim_tcp_client_t *cli)
+{
+    if (!cli) return;
+    fim_tcp_disconnect(cli);
+    pthread_mutex_destroy(&cli->seq_lock);
+    pthread_mutex_destroy(&cli->write_lock);
+}
+
+static uint8_t map_event_type(fim_event_type_t t)
+{
+    switch (t) {
+    case FIM_EVENT_CREATE: return FIM_EVT_CREATE;
+    case FIM_EVENT_MODIFY: return FIM_EVT_MODIFY;
+    case FIM_EVENT_DELETE: return FIM_EVT_DELETE;
+    case FIM_EVENT_ATTRIB: return FIM_EVT_ATTRIB;
+    case FIM_EVENT_MOVE:   return FIM_EVT_MOVE;
+    default:               return FIM_EVT_MODIFY;
+    }
+}
+
+static uint8_t map_source(fim_event_source_t s)
+{
+    switch (s) {
+    case FIM_SOURCE_EBPF:
+        return FIM_MON_EBPF;
+    case FIM_SOURCE_LKM:
+        return FIM_MON_LKM;
+    case FIM_SOURCE_INOTIFY:
+    default:
+        return FIM_MON_LKM;
+    }
+}
+
+int fim_tcp_register(fim_tcp_client_t *cli,
+                     const char *hostname,
+                     const char *ip_str,
+                     uint8_t monitor_type,
+                     const char *os,
+                     char *agent_id_out,
+                     size_t id_size)
+{
+    return fim_tcp_register_internal(cli, hostname, ip_str, monitor_type, os,
+                                     agent_id_out, id_size);
+}
+
+int fim_tcp_send_event(fim_tcp_client_t *cli, const fim_event_t *ev)
+{
+    if (!cli || cli->state != FIM_CONN_CONNECTED || !ev) return -1;
+
+    fim_msg_file_event_t msg;
+    memset(&msg, 0, sizeof(msg));
+    msg.agent_id = cli->agent_id;
+    msg.event_type = map_event_type(ev->type);
+    msg.file_path_len = (uint16_t)strlen(ev->path);
+    msg.file_path = (char *)ev->path;
+    msg.file_name_len = (uint16_t)strlen(ev->filename);
+    msg.file_name = (char *)ev->filename;
+    msg.file_permission = 0;
+    msg.detected_by = map_source(ev->source);
+    msg.pid = (uint32_t)ev->pid;
+    msg.timestamp = (uint32_t)ev->timestamp;
+
+    uint8_t buf[8192];
+    int len = fim_file_event_encode(&msg, buf, sizeof(buf));
+    if (len < 0) {
+        syslog(LOG_ERR, "fim-tcp: FILE_EVENT 직렬화 실패");
+        return -1;
+    }
+
+    int ret = fim_tcp_send_frame(cli, FIM_MSG_FILE_EVENT, buf, (uint32_t)len);
+    if (ret < 0)
+        syslog(LOG_WARNING, "fim-tcp: FILE_EVENT 전송 실패");
+
+    return ret;
 }

@@ -22,7 +22,6 @@ type AgentSession struct {
 	conn     *tls.Conn
 	agents   internal.AgentStore
 	events   internal.EventStore
-	scans    internal.ScanStore
 	alerts   internal.AlertStore
 	pub      internal.EventPublisher
 	onEvent  func(ctx context.Context, agentID string, e internal.FileEvent)
@@ -75,8 +74,6 @@ func (s *AgentSession) Run() {
 			s.handleHeartbeat(payload)
 		case MsgFileEvent:
 			s.handleFileEvent(payload)
-		case MsgScanResult:
-			s.handleScanResult(payload)
 		default:
 			slog.Warn("알 수 없는 메시지 타입",
 				"type", fmt.Sprintf("0x%02x", hdr.Type),
@@ -186,61 +183,4 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 	if s.onEvent != nil {
 		s.onEvent(s.ctx, agentID, e)
 	}
-}
-
-// handleScanResult : 0x04 SCAN_RESULT -> DB 저장
-func (s *AgentSession) handleScanResult(payload []byte) {
-	sr, err := DecodeScanResult(payload)
-	if err != nil {
-		slog.Warn("SCAN_RESULT 디코딩 실패", "err", err)
-		return
-	}
-
-	agentID := strconv.FormatUint(sr.AgentID, 10)
-
-	// 바이너리 -> internal 타입 변환
-	files := make([]internal.ScanFileEntry, len(sr.Files))
-	for i, f := range sr.Files {
-		files[i] = internal.ScanFileEntry{
-			FilePath:       f.FilePath,
-			FileName:       f.FileName,
-			FileHash:       hex.EncodeToString(f.FileHash[:]),
-			FilePermission: PermString(f.FilePermission),
-			Size:           int64(f.Size),
-			ModTime:        int64(f.ModTime),
-			Changed:        f.Changed,
-		}
-	}
-
-	p := internal.ScanResultPayload{
-		AgentID:   agentID,
-		ScanPath:  sr.ScanPath,
-		Files:     files,
-		Total:     int(sr.Total),
-		Changed:   int(sr.Changed),
-		Timestamp: int64(sr.Timestamp),
-	}
-
-	scanType := "baseline"
-	if sr.Changed > 0 {
-		scanType = "integrity"
-	}
-
-	if err := s.scans.SaveScanResult(s.ctx, p, scanType); err != nil {
-		slog.Error("SaveScanResult 실패", "err", err)
-		return
-	}
-
-	// 변경 파일 존재 -> HIGH 알림 생성
-	if sr.Changed > 0 {
-		msg := fmt.Sprintf("무결성 검사 결과: %d개 파일 변경 감지 (%s)",
-			sr.Changed, sr.ScanPath)
-		if err := s.alerts.CreateAlert(s.ctx, agentID,
-			internal.SeverityHigh, msg); err != nil {
-			slog.Error("CreateAlert 실패", "err", err)
-		}
-	}
-
-	slog.Info("스캔 완료", "agent_id", agentID,
-		"total", sr.Total, "changed", sr.Changed)
 }

@@ -1,41 +1,52 @@
+#define _POSIX_C_SOURCE 200809L
 #include "heartbeat.h"
-#include "protocol.h"
-#include <stdio.h>
 #include <time.h>
 #include <syslog.h>
+#include <string.h>
 
-void *heartbeat_thread(void *arg)
+void *fim_heartbeat_thread(void *arg)
 {
-    fim_heartbeat_t *hb = (fim_heartbeat_t *)arg;
+    fim_heartbeat_arg_t *hb = (fim_heartbeat_arg_t *)arg;
+    if (!hb || !hb->cli) return NULL;
 
-    syslog(LOG_INFO, "heartbeat: 스레드 시작 (30초 주기)");
+    syslog(LOG_INFO, "fim-hb: heartbeat 스레드 시작");
 
     while (hb->running) {
-        /* HEARTBEAT JSON 조립 */
-        char json[256];
-        snprintf(json, sizeof(json),
-            "{\"agent_id\":\"%s\","
-            "\"status\":\"online\","
-            "\"timestamp\":%ld}",
-            hb->agent_id,
-            (long)time(NULL));
+        uint16_t interval = hb->interval_sec;
+        if (interval == 0) interval = FIM_HEARTBEAT_DEFAULT_SEC;
 
-        if (hb->client->connected) {
-            if (fim_send_frame(hb->client->ssl, FIM_MSG_HEARTBEAT, json) < 0) {
-                syslog(LOG_WARNING, "heartbeat: 전송 실패 → 재연결 대기");
-                hb->client->connected = 0;
-                tcp_client_disconnect(hb->client);
-                tcp_client_reconnect_loop(hb->client);
-            } else {
-                syslog(LOG_DEBUG, "heartbeat: 전송 완료");
-            }
+        struct timespec ts;
+        ts.tv_sec = interval;
+        ts.tv_nsec = 0;
+        nanosleep(&ts, NULL);
+
+        if (!hb->running) break;
+
+        fim_msg_heartbeat_t msg;
+        msg.agent_id = hb->cli->agent_id;
+        msg.status = FIM_STATUS_HEALTHY;
+        msg.timestamp = (uint32_t)time(NULL);
+
+        uint8_t buf[13];
+        int len = fim_heartbeat_encode(&msg, buf, sizeof(buf));
+        if (len < 0) {
+            syslog(LOG_ERR, "fim-hb: 직렬화 실패");
+            continue;
         }
 
-        /* 30초 대기 (1초씩 나눠서 종료 신호 빠르게 감지) */
-        for (int i = 0; i < 30 && hb->running; i++)
-            sleep(1);
+        int ret = fim_tcp_send_frame(hb->cli, FIM_MSG_HEARTBEAT, buf, (uint32_t)len);
+        if (ret == -2) {
+            syslog(LOG_WARNING, "fim-hb: 전송 실패 — 재연결 시도");
+            if (fim_tcp_reconnect(hb->cli) < 0) {
+                syslog(LOG_ERR, "fim-hb: 재연결 실패 — 서버 종료 판단");
+                hb->running = 0;
+                break;
+            }
+        } else if (ret < 0) {
+            syslog(LOG_WARNING, "fim-hb: 전송 실패 (재시도 예정)");
+        }
     }
 
-    syslog(LOG_INFO, "heartbeat: 스레드 종료");
+    syslog(LOG_INFO, "fim-hb: heartbeat 스레드 종료");
     return NULL;
 }

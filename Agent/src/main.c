@@ -15,10 +15,9 @@
  *   │                  pop  ▼                               │
  *   │          [메인 스레드: 통합 이벤트 처리기]              │
  *   │           - 무결성 검사 (SHA-256)                     │
- *   │           - tcp_client_send_event() → Go 서버         │
+ *   │           - fim_tcp_send_event() → Go 서버            │
  *   │                                                      │
  *   │  [스레드 3: heartbeat]  30초 주기 HEARTBEAT 전송       │
- *   │  [스레드 4: recv_loop]  서버 → 에이전트 COMMAND 수신   │
  *   └──────────────────────────────────────────────────────┘
  *
  * kernel < 5.8 → inotify 단독 (모니터링만, 차단 불가)
@@ -27,9 +26,9 @@
  * 환경변수 (transport 설정):
  *   FIM_SERVER_HOST   서버 IP/호스트 (기본: 127.0.0.1)
  *   FIM_SERVER_PORT   서버 포트      (기본: 9000)
- *   FIM_CA_CRT        CA 인증서 경로  (기본: ~/fim-agent/certs/ca.crt)
- *   FIM_AGENT_CRT     에이전트 인증서 (기본: ~/fim-agent/certs/agent.crt)
- *   FIM_AGENT_KEY     에이전트 개인키 (기본: ~/fim-agent/certs/agent.key)
+ *   FIM_CA_CRT        CA 인증서 경로  (기본: /etc/fim_monitor/certs/ca.crt)
+ *   FIM_AGENT_CRT     에이전트 인증서 (기본: /etc/fim_monitor/certs/agent.crt)
+ *   FIM_AGENT_KEY     에이전트 개인키 (기본: /etc/fim_monitor/certs/agent.key)
  *
  * 시그널:
  *   SIGTERM/SIGINT  → 정상 종료
@@ -94,6 +93,20 @@ static int              g_transport_ok  = 0;
 extern fim_backend_t *fim_inotify_create(void);
 extern int  fim_config_load(fim_config_t *cfg, const char *path);
 extern void fim_config_dump(fim_config_t *cfg);
+
+static int current_transport_monitor_type(uint8_t *monitor_type)
+{
+    if (!monitor_type) return -1;
+    if (g_ebpf_active) {
+        *monitor_type = FIM_MON_EBPF;
+        return 0;
+    }
+    if (g_lkm_active) {
+        *monitor_type = FIM_MON_LKM;
+        return 0;
+    }
+    return -1;
+}
 
 /* ── 커널 버전 체크 ────────────────────────────── */
 static int get_kernel_version(void) {
@@ -206,13 +219,14 @@ static void *backend_thread(void *arg) {
 
 static void send_event_with_reconnect(const fim_event_t *ev) {
     if (!g_transport_ok || !g_agent_id[0]) return;
-    if (tcp_client_send_event(&g_tcp_client, g_agent_id, ev) < 0) {
+    if (fim_tcp_send_event(&g_tcp_client, ev) < 0) {
         LOG_WARN_FIM("[transport] FILE_EVENT 전송 실패 — 재연결 시도");
         g_transport_ok = 0;
-        tcp_client_reconnect_loop(&g_tcp_client);
-        if (g_tcp_client.connected) {
+        if (fim_tcp_reconnect(&g_tcp_client) == 0) {
+            snprintf(g_agent_id, sizeof(g_agent_id), "%llu",
+                     (unsigned long long)g_tcp_client.agent_id);
             g_transport_ok = 1;
-            tcp_client_send_event(&g_tcp_client, g_agent_id, ev);
+            fim_tcp_send_event(&g_tcp_client, ev);
         }
     }
 }
@@ -242,9 +256,6 @@ static void process_event(const fim_event_t *ev) {
         if (r == FIM_INTEGRITY_MISMATCH) {
             LOG_ALERT_FIM("[integrity] 변조 감지: %s  expected=%s  actual=%s",
                           ev->path, expected, actual);
-            if (g_transport_ok && g_agent_id[0])
-                tcp_client_send_integrity_alert(&g_tcp_client, g_agent_id,
-                                               ev, expected, actual);
         } else if (r == FIM_INTEGRITY_NEW) {
             LOG_INFO_FIM("[baseline] 베이스라인 미등록 파일 수정 감지 — 신규 등록: %s",
                          ev->path);
@@ -701,6 +712,9 @@ int main(int argc, char *argv[]) {
     }
 
     /* ── transport 초기화 (비필수) ─────────────── */
+    int tls_inited = 0;
+    int transport_inited = 0;
+    uint8_t transport_monitor_type = 0;
     const char *server_host = getenv("FIM_SERVER_HOST");
     if (!server_host) server_host = "127.0.0.1";
     int server_port = 9000;
@@ -718,56 +732,66 @@ int main(int argc, char *argv[]) {
 
     LOG_INFO_FIM("[transport] 서버: %s:%d", server_host, server_port);
 
-    if (tls_context_init(&g_tls_ctx, ca_crt, agent_crt, agent_key) < 0) {
-        LOG_WARN_FIM("[transport] TLS 컨텍스트 초기화 실패 — transport 비활성화");
+    if (current_transport_monitor_type(&transport_monitor_type) < 0) {
+        LOG_WARN_FIM("[transport] eBPF/LKM 미활성 — transport 등록 생략");
     } else {
-        memset(&g_tcp_client, 0, sizeof(g_tcp_client));
-        g_tcp_client.tls_ctx = &g_tls_ctx;
-        g_tcp_client.host    = server_host;
-        g_tcp_client.port    = server_port;
-        g_tcp_client.sockfd  = -1;
+        char hostname[256] = {0};
+        char local_ip[64] = {0};
+        get_hostname(hostname, sizeof(hostname));
+        get_local_ip(server_host, server_port, local_ip, sizeof(local_ip));
 
-        if (tcp_client_connect(&g_tcp_client) < 0) {
-            LOG_WARN_FIM("[transport] 서버 연결 실패 — 백그라운드 재연결 시도");
-            tcp_client_reconnect_loop(&g_tcp_client);
-        }
+        if (tls_context_init(&g_tls_ctx, ca_crt, agent_crt, agent_key) < 0) {
+            LOG_WARN_FIM("[transport] TLS 컨텍스트 초기화 실패 — transport 비활성화");
+        } else {
+            tls_inited = 1;
 
-        if (g_tcp_client.connected) {
-            char hostname[256] = {0}, local_ip[64] = {0};
-            get_hostname(hostname, sizeof(hostname));
-            get_local_ip(server_host, server_port, local_ip, sizeof(local_ip));
-
-            if (tcp_client_register(&g_tcp_client, hostname, local_ip,
-                                    "0.1.0", "Linux", "inotify",
-                                    g_agent_id, sizeof(g_agent_id)) == 0) {
-                LOG_INFO_FIM("[transport] 등록 완료 — agent_id: %s", g_agent_id);
-                g_transport_ok = 1;
+            if (fim_tcp_init(&g_tcp_client, &g_tls_ctx, server_host,
+                             (uint16_t)server_port) < 0) {
+                LOG_WARN_FIM("[transport] TCP 클라이언트 초기화 실패");
             } else {
-                LOG_WARN_FIM("[transport] REGISTER 실패");
+                transport_inited = 1;
+                snprintf(g_tcp_client.reg_hostname, sizeof(g_tcp_client.reg_hostname),
+                         "%s", hostname);
+                snprintf(g_tcp_client.reg_ip, sizeof(g_tcp_client.reg_ip),
+                         "%s", local_ip);
+                snprintf(g_tcp_client.reg_os, sizeof(g_tcp_client.reg_os),
+                         "%s", "Linux");
+                g_tcp_client.reg_monitor_type = transport_monitor_type;
+                g_tcp_client.reg_cached = 1;
+            }
+
+            if (transport_inited && fim_tcp_connect(&g_tcp_client) < 0) {
+                LOG_WARN_FIM("[transport] 서버 연결 실패 — 백그라운드 재연결 시도");
+                if (fim_tcp_reconnect(&g_tcp_client) == 0) {
+                    snprintf(g_agent_id, sizeof(g_agent_id), "%llu",
+                             (unsigned long long)g_tcp_client.agent_id);
+                    LOG_INFO_FIM("[transport] 등록 완료 — agent_id: %s", g_agent_id);
+                    g_transport_ok = 1;
+                }
+            } else if (transport_inited) {
+                if (fim_tcp_register(&g_tcp_client, hostname, local_ip,
+                                     transport_monitor_type,
+                                     "Linux", g_agent_id, sizeof(g_agent_id)) == 0) {
+                    LOG_INFO_FIM("[transport] 등록 완료 — agent_id: %s", g_agent_id);
+                    g_transport_ok = 1;
+                } else {
+                    LOG_WARN_FIM("[transport] REGISTER 실패");
+                }
             }
         }
     }
 
     /* ── heartbeat 스레드 ─────────────────────── */
     pthread_t hb_thread = 0;
-    fim_heartbeat_t hb_arg = {0};
+    fim_heartbeat_arg_t hb_arg = {0};
     if (g_transport_ok) {
-        hb_arg.client   = &g_tcp_client;
-        hb_arg.agent_id = g_agent_id;
-        hb_arg.running  = 1;
-        if (pthread_create(&hb_thread, NULL, heartbeat_thread, &hb_arg) != 0)
+        hb_arg.cli = &g_tcp_client;
+        hb_arg.interval_sec = FIM_HEARTBEAT_DEFAULT_SEC;
+        hb_arg.running = 1;
+        if (pthread_create(&hb_thread, NULL, fim_heartbeat_thread, &hb_arg) != 0)
             LOG_WARN_FIM("[transport] heartbeat 스레드 생성 실패");
         else
             LOG_INFO_FIM("[transport] heartbeat 스레드 시작 완료");
-    }
-
-    /* ── recv_loop 스레드 ─────────────────────── */
-    pthread_t recv_thread = 0;
-    if (g_transport_ok) {
-        if (pthread_create(&recv_thread, NULL, tcp_client_recv_loop, &g_tcp_client) != 0)
-            LOG_WARN_FIM("[transport] recv_loop 스레드 생성 실패");
-        else
-            LOG_INFO_FIM("[transport] recv_loop 스레드 시작 완료");
     }
 
     /* ── 로컬 베이스라인 구축 ─────────────────── */
@@ -887,7 +911,6 @@ int main(int argc, char *argv[]) {
 
     if (hb_arg.running) hb_arg.running = 0;
     if (hb_thread)    { pthread_join(hb_thread,    NULL); LOG_INFO_FIM("heartbeat 스레드 합류"); }
-    if (recv_thread)  { pthread_cancel(recv_thread); pthread_join(recv_thread, NULL); }
     if (ino_thread)   { pthread_join(ino_thread,   NULL); LOG_INFO_FIM("inotify 스레드 합류"); }
     /* eBPF: stop → join → cleanup 순서를 지켜야 use-after-free 없음 */
 #ifdef HAVE_LIBBPF
@@ -901,8 +924,11 @@ int main(int argc, char *argv[]) {
 
     if (g_be_inotify)  { g_be_inotify->cleanup(g_be_inotify); free(g_be_inotify); }
 
-    if (g_transport_ok) {
-        tcp_client_disconnect(&g_tcp_client);
+    if (transport_inited) {
+        fim_tcp_disconnect(&g_tcp_client);
+        fim_tcp_free(&g_tcp_client);
+    }
+    if (tls_inited) {
         tls_context_free(&g_tls_ctx);
         LOG_INFO_FIM("[transport] 연결 종료");
     }

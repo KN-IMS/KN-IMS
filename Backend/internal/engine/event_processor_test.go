@@ -109,7 +109,7 @@ func TestProcess_SensitivePath_CreatesHighAlert(t *testing.T) {
 	e := internal.FileEvent{
 		EventType:  "MODIFY",
 		FilePath:   "/etc/passwd",
-		DetectedBy: "inotify",
+		DetectedBy: "lkm",
 		OccurredAt: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC),
 	}
 
@@ -131,7 +131,7 @@ func TestProcess_NightTime_CreatesMediumAlert(t *testing.T) {
 	e := internal.FileEvent{
 		EventType:  "CREATE",
 		FilePath:   "/home/user/test.txt",
-		DetectedBy: "inotify",
+		DetectedBy: "lkm",
 		OccurredAt: time.Date(2026, 1, 1, 23, 0, 0, 0, time.UTC),
 	}
 
@@ -153,7 +153,7 @@ func TestProcess_NormalEvent_NoAlert(t *testing.T) {
 	e := internal.FileEvent{
 		EventType:  "MODIFY",
 		FilePath:   "/home/user/doc.txt",
-		DetectedBy: "inotify",
+		DetectedBy: "lkm",
 		OccurredAt: time.Date(2026, 1, 1, 14, 0, 0, 0, time.UTC),
 	}
 
@@ -172,7 +172,7 @@ func TestProcess_SensitiveAndNight_TwoAlerts(t *testing.T) {
 	e := internal.FileEvent{
 		EventType:  "MODIFY",
 		FilePath:   "/etc/shadow",
-		DetectedBy: "inotify",
+		DetectedBy: "lkm",
 		OccurredAt: time.Date(2026, 1, 1, 2, 0, 0, 0, time.UTC),
 	}
 

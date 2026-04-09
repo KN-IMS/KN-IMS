@@ -20,7 +20,7 @@ type RegisterPayload struct {
 	Hostname    string
 	IP          string
 	OS          string
-	MonitorType string // inotify, ebpf
+	MonitorType string // lkm, ebpf
 }
 
 // FileEventPayload : 에이전트 -> 서버 파일 변경 이벤트
@@ -31,30 +31,9 @@ type FileEventPayload struct {
 	FileName       string
 	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
-	DetectedBy     string // inotify, ebpf
+	DetectedBy     string // lkm, ebpf
 	Pid            int
 	Timestamp      int64
-}
-
-// ScanFileEntry : 스캔된 개별 파일 항목
-type ScanFileEntry struct {
-	FilePath       string
-	FileName       string
-	FileHash       string // SHA-256 hex
-	FilePermission string // ex) 0644
-	Size           int64
-	ModTime        int64
-	Changed        bool
-}
-
-// ScanResultPayload : 에이전트 -> 서버 스캔 결과
-type ScanResultPayload struct {
-	AgentID   string
-	ScanPath  string
-	Files     []ScanFileEntry
-	Total     int
-	Changed   int
-	Timestamp int64
 }
 
 // Agent 도메인
@@ -66,7 +45,7 @@ type Agent struct {
 	IP           string
 	Version      string
 	OS           string
-	MonitorType  string // inotify, ebpf
+	MonitorType  string // lkm, ebpf
 	Status       string // online, offline
 	RegisteredAt time.Time
 	LastSeen     time.Time
@@ -102,7 +81,7 @@ type FileEvent struct {
 	FileName       string
 	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
-	DetectedBy     string // inotify, ebpf
+	DetectedBy     string // lkm, ebpf
 	Pid            int    // PID를 제공하지 않는 이벤트는 0
 	OccurredAt     time.Time
 	ReceivedAt     time.Time
@@ -135,29 +114,6 @@ type EventPublisher interface {
 	Publish(event FileEvent)
 	// Subscribe : SSE 핸들러가 구독 채널 획득
 	Subscribe() <-chan FileEvent
-}
-
-// ScanResult 도메인
-// ScanResult : DB에 저장되는 스캔 결과 요약
-type ScanResult struct {
-	ID        int64
-	AgentID   string
-	ScanType  string // baseline, integrity
-	ScanPath  string
-	Total     int
-	Changed   int
-	ScannedAt time.Time
-}
-
-// ScanStore : 베이스라인/무결성 스캔 결과 저장/조회
-// 구현 : internal/store/scan_store.go
-type ScanStore interface {
-	// SaveScanResult : 0x04 SCAN_RESULT 수신 -> DB 저장
-	SaveScanResult(ctx context.Context, payload ScanResultPayload, scanType string) error
-	// GetLatestScan : 에이전트의 최근 스캔 요약 조회
-	GetLatestScan(ctx context.Context, agentID string) (ScanResult, error)
-	// GetScanEntries : 스캔 ID의 개별 파일 목록 조회
-	GetScanEntries(ctx context.Context, scanID int64) ([]ScanFileEntry, error)
 }
 
 // Alert 도메인
