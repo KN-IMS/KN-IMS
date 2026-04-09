@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fim_lkm_hooks.c — sys_call_table 후킹
- *
- * kernel 3.10 (CentOS 7) 기준.
+ * lkm310.c — sys_call_table 후킹 (kernel 3.10 ~ 4.1)
+ * CentOS 7 (3.10), Ubuntu 14.04 LTS (3.13), Ubuntu 16.04 LTS (4.4)
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -19,10 +18,8 @@
 #include <linux/xattr.h>
 #include <asm/unistd.h>
 
-#include "fim_lkm_policy.h"
-#include "fim_lkm_events.h"
-
-/* ── sys_call_table ──────────────────────────────────────── */
+#include "../fim_lkm_policy.h"
+#include "../fim_lkm_events.h"
 
 typedef void *(*sys_call_ptr_t)(void);
 
@@ -71,7 +68,7 @@ static orig_setxattr_t   orig_sys_setxattr;
 static orig_lsetxattr_t  orig_sys_lsetxattr;
 static orig_fsetxattr_t  orig_sys_fsetxattr;
 
-// overwrite cr0 ensure disable wp
+// cr0 wp bit confusion
 static unsigned long fim_force_order;
 
 static inline void mywrite_cr0(unsigned long val)
@@ -93,7 +90,6 @@ static void enable_write_protection(void)
     mywrite_cr0(cr0);
 }
 
-// helper
 static int pathat_to_devino(int dfd, const char __user *upath,
                              uint64_t *dev, uint64_t *ino)
 {
@@ -138,7 +134,6 @@ static int fd_to_devino(unsigned int fd, uint64_t *dev, uint64_t *ino)
     return 1;
 }
 
-// policy check helper 
 static long fim_check(uint64_t dev, uint64_t ino, uint32_t op,
                        const char *op_name)
 {
@@ -173,9 +168,10 @@ static long fim_check_delete(uint64_t dev, uint64_t ino)
     }
 
     fim_event_enqueue(dev, ino, FIM_OP_DELETE, 0);
-    inode_policy_remove(dev, ino);  
+    inode_policy_remove(dev, ino);
     return 0;
 }
+
 
 static asmlinkage long fim_sys_write(unsigned int fd,
                                      const char __user *buf,
@@ -226,7 +222,7 @@ static long check_open_flags(int dfd, const char __user *upath, int flags)
         return 0;
 
     if (!pathat_to_devino(dfd, upath, &dev, &ino))
-        return 0;   
+        return 0;
     return fim_check(dev, ino, FIM_OP_WRITE, "open");
 }
 
@@ -313,9 +309,7 @@ static long check_rename(int olddfd, const char __user *oldname,
 static asmlinkage long fim_sys_rename(const char __user *oldname,
                                       const char __user *newname)
 {
-    long rc;
-    pr_debug("fim_sys_rename called\n");
-    rc = check_rename(AT_FDCWD, oldname, AT_FDCWD, newname);
+    long rc = check_rename(AT_FDCWD, oldname, AT_FDCWD, newname);
     if (rc)
         return rc;
     return orig_sys_rename(oldname, newname);
@@ -326,9 +320,7 @@ static asmlinkage long fim_sys_renameat(int olddfd,
                                         int newdfd,
                                         const char __user *newname)
 {
-    long rc;
-    pr_debug("fim_sys_renameat called\n");
-    rc = check_rename(olddfd, oldname, newdfd, newname);
+    long rc = check_rename(olddfd, oldname, newdfd, newname);
     if (rc)
         return rc;
     return orig_sys_renameat(olddfd, oldname, newdfd, newname);
@@ -341,9 +333,7 @@ static asmlinkage long fim_sys_renameat2(int olddfd,
                                          const char __user *newname,
                                          unsigned int flags)
 {
-    long rc;
-    pr_debug("fim_sys_renameat2 called\n");
-    rc = check_rename(olddfd, oldname, newdfd, newname);
+    long rc = check_rename(olddfd, oldname, newdfd, newname);
     if (rc)
         return rc;
     return orig_sys_renameat2(olddfd, oldname, newdfd, newname, flags);
@@ -438,7 +428,6 @@ static asmlinkage long fim_sys_linkat(int olddfd,
     return orig_sys_linkat(olddfd, oldname, newdfd, newname, flags);
 }
 
-
 static asmlinkage long fim_sys_setxattr(const char __user *path,
                                         const char __user *name,
                                         const void __user *value,
@@ -528,7 +517,7 @@ int fim_hooks_init(void)
     HOOK(fsetxattr);
     enable_write_protection();
 
-    pr_info("hooks installed (%d syscalls)\n", 19);
+    pr_info("hooks installed (sys_call_table direct-args, %d syscalls)\n", 19);
     return 0;
 }
 

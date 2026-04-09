@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * fim_lkm_events.c — 이벤트 큐 (커널 → 유저스페이스)
- *
- * 설계 원칙:
- *   kprobe 핸들러(atomic context)에서 직접 wake_up 등 스케줄러 호출은 위험.
- *   따라서 kprobe 핸들러는 kfifo에 push만 하고, 별도 workqueue가 wake_up을 담당.
- *
  *   kprobe handler → fim_event_enqueue() → kfifo (atomic safe)
  *   workqueue      → fim_event_flush_work() → wake_up_interruptible()
  *   userspace read ← wait_event_interruptible ← fim_wq
@@ -27,7 +22,7 @@
 #include "fim_lkm_events.h"
 #include "fim_lkm_policy.h"
 
-#define FIM_EVENT_QUEUE_SIZE  64   /* 최대 대기 이벤트 수 (2의 제곱수) */
+#define FIM_EVENT_QUEUE_SIZE  64   
 
 static DEFINE_KFIFO(fim_fifo, struct fim_lkm_event, FIM_EVENT_QUEUE_SIZE);
 static DEFINE_SPINLOCK(fim_fifo_lock);
@@ -39,16 +34,14 @@ static DECLARE_WORK(fim_flush_work, fim_event_flush_work);
 
 static void fim_event_flush_work(struct work_struct *w)
 {
-    /* process context이므로 wake_up 안전 */
     if (!kfifo_is_empty(&fim_fifo))
         wake_up_interruptible(&fim_wq);
 }
 
 /*
- * fim_event_enqueue — kprobe atomic context에서 호출 가능
- *
- * wake_up을 직접 호출하지 않고 workqueue에 schedule.
- */
+* fim_event_enqueue — can be called in kprobe atomic context
+* Schedule to workqueue instead of calling wake_up directly.
+*/
 void fim_event_enqueue(uint64_t dev, uint64_t ino,
                        uint32_t op, uint32_t blocked)
 {
@@ -69,7 +62,7 @@ void fim_event_enqueue(uint64_t dev, uint64_t ino,
 #endif
     strncpy(ev.comm, current->comm, sizeof(ev.comm) - 1);
 
-    /* 경로: read_lock_irqsave로 안전하게 조회 */
+    /* Path: Safely retrieve with read_lock_irqsave */
     {
         unsigned long lflags;
         read_lock_irqsave(&fim_policy_lock, lflags);
@@ -82,7 +75,7 @@ void fim_event_enqueue(uint64_t dev, uint64_t ino,
         pr_warn("event queue full (ino=%llu)\n", ino);
     spin_unlock_irqrestore(&fim_fifo_lock, flags);
 
-    /* wake_up은 workqueue(process context)에서 — atomic context에서 직접 금지 */
+    /* wake_up is prohibited in the workqueue (process context) — directly in the atomic context */    
     (void)schedule_work(&fim_flush_work);
 }
 

@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(fim_agent C CXX)
+project(fim_agent C)
 
-# ── 언어 표준 — core: C11 / 팀원 모듈: C++17 혼합 빌드 ────
+# ── 언어 표준 ───────────────────────────────────
 set(CMAKE_C_STANDARD          11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD          17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ── 컴파일 옵션 ────────────────────────────────
 add_compile_options(-Wall -Wextra -O2)

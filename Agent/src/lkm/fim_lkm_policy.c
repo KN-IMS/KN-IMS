@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fim_lkm_policy.c — inode 기반 정책 해시테이블
+ * fim_lkm_policy.c — inode based policy hash table
  *
- * 키: {dev, ino}  (커널 dev_t 인코딩)
- * 값: {mask, block, path}
- *
- * 유저스페이스가 ioctl로 정책을 주입하면 여기에 저장되고,
- * kprobe 핸들러가 파일 접근 시 inode_policy_lookup()으로 조회한다.
+ * When the user space injects a policy via ioctl, it is stored here,
+ * retrieved using inode_policy_lookup().
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -23,8 +20,6 @@ void fim_policy_init(void)
     hash_init(fim_policy_ht);
 }
 
-/* ── 내부 헬퍼 ──────────────────────────────────────────── */
-
 static u32 make_key(uint64_t dev, uint64_t ino)
 {
     uint32_t data[4] = {
@@ -36,7 +31,7 @@ static u32 make_key(uint64_t dev, uint64_t ino)
     return jhash2(data, 4, 0) & ((1U << FIM_POLICY_BITS) - 1);
 }
 
-/* 락 없이 엔트리 탐색 — 반드시 read/write_lock 보유 상태에서 호출 */
+/* Search for entry without lock — must be called while holding read/write_lock */
 static struct fim_policy_entry *find_entry(uint64_t dev, uint64_t ino)
 {
     struct fim_policy_entry *e;
@@ -49,7 +44,7 @@ static struct fim_policy_entry *find_entry(uint64_t dev, uint64_t ino)
     return NULL;
 }
 
-/* ── 공개 API ───────────────────────────────────────────── */
+/* ── Public API ───────────────────────────────────────────── */
 
 int inode_policy_add(uint64_t dev, uint64_t ino,
                      uint32_t mask, uint32_t block,
@@ -59,7 +54,6 @@ int inode_policy_add(uint64_t dev, uint64_t ino,
     u32 key = make_key(dev, ino);
     unsigned long flags;
 
-    /* 이미 있으면 덮어씀 */
     write_lock_irqsave(&fim_policy_lock, flags);
     e = find_entry(dev, ino);
     if (e) {
@@ -126,10 +120,6 @@ void inode_policy_clear(void)
     pr_info("policy cleared\n");
 }
 
-/*
- * hook 내부에서 호출 — 성능 민감 경로.
- * read_lock으로 동시 다중 접근 허용.
- */
 int inode_policy_lookup(uint64_t dev, uint64_t ino,
                         uint32_t op, uint32_t *out_block)
 {
@@ -149,9 +139,9 @@ int inode_policy_lookup(uint64_t dev, uint64_t ino,
 
 const char *inode_policy_path(uint64_t dev, uint64_t ino)
 {
-    /* 주의: read_lock 보유 상태에서 호출해야 하며,
-     *        반환된 포인터는 락 해제 전에만 유효하다.
-     *        이벤트 emit 시 strncpy로 복사해서 사용할 것. */
+    /* Note: Must be called while holding read_lock,
+     * The returned pointer is valid only before the lock is released.
+     * Copy to strncpy and use when emitting an event. */
     struct fim_policy_entry *e = find_entry(dev, ino);
     return e ? e->path : "";
 }

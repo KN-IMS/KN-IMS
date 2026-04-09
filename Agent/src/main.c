@@ -181,10 +181,10 @@ static void *lkm_event_thread(void *arg)
         strncpy(ev.path, lev.path, sizeof(ev.path) - 1);
         strncpy(ev.comm, lev.comm, sizeof(ev.comm) - 1);
 
-        LOG_ALERT_FIM("[lkm] %s %s  (pid=%d uid=%d comm=%s)%s",
+        LOG_ALERT_FIM("[lkm] %s %s %s(pid=%d uid=%d comm=%s)",
                       ev.path, fim_event_type_str(ev.type),
-                      ev.pid, ev.uid, ev.comm,
-                      lev.blocked ? "  [BLOCKED]" : "");
+                      lev.blocked ? "  [BLOCKED]" : "",
+                      ev.pid, ev.uid, ev.comm);
 
         fim_queue_push(queue, &ev);
     }

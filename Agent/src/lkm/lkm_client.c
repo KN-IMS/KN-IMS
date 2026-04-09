@@ -1,9 +1,9 @@
 /*
- * lkm_client.c — fim_monitor 유저스페이스 ↔ fim_lkm.ko 통신 구현
+ * lkm_client.c — fim_monitor ↔ fim_lkm.ko impl
  *
- * - stat()으로 st_dev/st_ino 추출 후 ioctl로 LKM에 정책 주입
- * - dev_t 인코딩 변환: glibc (major<<8)|minor → 커널 (major<<20)|minor
- * - lkm_add_from_baseline(): 베이스라인 DB 전체를 한 번에 주입
+ * - Extract st_dev/st_ino using stat() and inject policy into LKM using ioctl
+ * - dev_t encoding conversion: glibc (major<<8)|minor → kernel (major<<20)|minor
+ * - lkm_add_from_baseline(): Inject the entire baseline DB at once
  */
 
 #include <fcntl.h>
@@ -13,24 +13,17 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/select.h>
-#include <sys/sysmacros.h>   /* major(), minor() */
+#include <sys/sysmacros.h>  
 #include <pthread.h>
 
 #include "lkm_client.h"
 
 static int g_lkm_fd = -1;
 
-/* ── dev_t 변환 ──────────────────────────────────────────
- * 유저스페이스 stat() st_dev:  glibc 인코딩 (major << 8)  | minor
- * 커널 i_sb->s_dev:            커널 인코딩  (major << 20) | minor
- * major() / minor() 매크로가 glibc 인코딩을 올바르게 분해한다.
- * ──────────────────────────────────────────────────────── */
 static uint64_t stat_dev_to_kernel(dev_t st_dev)
 {
     return ((uint64_t)major(st_dev) << 20) | (uint64_t)minor(st_dev);
 }
-
-/* ── 초기화 / 정리 ──────────────────────────────────────── */
 
 int lkm_client_init(void)
 {
@@ -52,8 +45,6 @@ int lkm_client_ready(void)
 {
     return g_lkm_fd >= 0;
 }
-
-/* ── 정책 조작 ──────────────────────────────────────────── */
 
 int lkm_add_inode(dev_t st_dev, ino_t st_ino,
                   uint32_t mask, uint32_t block,
@@ -82,13 +73,6 @@ int lkm_clear_all(void)
     return ioctl(g_lkm_fd, FIM_IOC_CLEAR_ALL, 0);
 }
 
-/*
- * lkm_add_from_baseline — 베이스라인 DB 전체를 LKM 정책으로 주입
- *
- * baseline entry에는 path만 있고 dev/ino가 없으므로
- * 각 파일에 stat()을 호출해서 가져온다.
- * 삭제되거나 접근 불가한 파일은 건너뜀.
- */
 int lkm_add_from_baseline(fim_baseline_db_t *db, uint32_t block)
 {
     int added = 0;
@@ -101,7 +85,7 @@ int lkm_add_from_baseline(fim_baseline_db_t *db, uint32_t block)
         struct stat st;
 
         if (stat(path, &st) < 0)
-            continue;   /* 접근 불가 / 삭제된 파일 스킵 */
+            continue;  
 
         if (lkm_add_inode(st.st_dev, st.st_ino, mask, block, path) == 0)
             added++;
@@ -111,7 +95,7 @@ int lkm_add_from_baseline(fim_baseline_db_t *db, uint32_t block)
     return added;
 }
 
-/* ── 이벤트 수신 ────────────────────────────────────────── */
+/* ── event polling ────────────────────────────────────────── */
 
 int lkm_read_event(struct fim_lkm_event *ev)
 {
@@ -121,11 +105,6 @@ int lkm_read_event(struct fim_lkm_event *ev)
     return 0;
 }
 
-/*
- * lkm_read_event_timeout — timeout_ms 동안 이벤트 대기
- * 반환: 0=이벤트 수신, -ETIMEDOUT=타임아웃, 음수=오류
- * g_running 체크를 위해 메인 루프에서 짧은 타임아웃으로 폴링.
- */
 int lkm_read_event_timeout(struct fim_lkm_event *ev, int timeout_ms)
 {
     fd_set rfds;

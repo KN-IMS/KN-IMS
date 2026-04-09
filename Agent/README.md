@@ -66,6 +66,12 @@ cat /sys/kernel/security/lsm   # bpf 포함 여부 확인
 # 3. 빌드
 mkdir build && cd build && cmake .. && make -j$(nproc)
 
+## cmake 수동 설치
+curl -L https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.sh -o cmake.sh   
+
+chmod +x cmake.sh 
+sudo sh cmake.sh --prefix=/usr/local --skip-license 
+
 # 4. 에이전트 실행
 sudo ./build/fim_agent -f -v -c configs/test.conf -m lock
 ```

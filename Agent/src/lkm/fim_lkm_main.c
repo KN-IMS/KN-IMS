@@ -2,15 +2,15 @@
 /*
  * fim_lkm_main.c — 모듈 진입점
  *
- * 초기화 순서:
- *   1. 정책 해시테이블 초기화 (inode_policy_clear)
- *   2. char device 등록 (/dev/fim_lkm)
- *   3. kprobe 후킹 (vfs_write, vfs_unlink, vfs_rename)
+ * initialize:
+ *   1. Initialize policy hash table (inode_policy_clear)
+ *   2. Register char device (/dev/fim_lkm)
+ *   3. hooking (vfs_write, vfs_unlink, vfs_rename)
  *
- * 해제 순서 (역순):
- *   3. kprobe 해제
- *   2. char device 해제
- *   1. 정책 테이블 해제
+ * release:
+ *   3. release hook
+ *   2. release char device 
+ *   1. release 테이블 해제
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -22,7 +22,6 @@
 
 #include "fim_lkm_policy.h"
 
-/* 외부 선언 — 각 .c 파일에 구현 */
 extern int  fim_chardev_init(void);
 extern void fim_chardev_exit(void);
 extern int  fim_hooks_init(void);
@@ -54,8 +53,8 @@ static int __init fim_lkm_init(void)
 
 static void __exit fim_lkm_exit(void)
 {
-    fim_hooks_exit();           /* kprobe 먼저 해제 — 이후 enqueue 없음 */
-    fim_events_flush_cancel();  /* pending workqueue work 취소 */
+    fim_hooks_exit();           /* No enqueue afterwards */
+    fim_events_flush_cancel();  /* Cancel pending workqueue work */
     fim_chardev_exit();
     inode_policy_clear();
     pr_info("unloaded\n");

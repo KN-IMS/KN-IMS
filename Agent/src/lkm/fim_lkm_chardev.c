@@ -2,9 +2,9 @@
 /*
  * fim_lkm_chardev.c — /dev/fim_lkm char device
  *
- * 유저스페이스와의 통신 채널.
- *   ioctl: 정책 추가/제거/초기화
- *   read:  이벤트 수신 (blocking)
+ * Communication channel with user space.
+ *   ioctl: Add/Remove/Reset policies
+ *   read:  Receive event(blocking)
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -63,10 +63,9 @@ static ssize_t fim_read(struct file *f, char __user *buf,
     if (count < sizeof(ev))
         return -EINVAL;
 
-    /* 이벤트가 생길 때까지 대기 */
     ret = wait_event_interruptible(fim_wq, !fim_event_empty());
     if (ret)
-        return ret;   /* 시그널로 인터럽트됨 */
+        return ret;   
 
     if (!fim_event_pop(&ev))
         return 0;
