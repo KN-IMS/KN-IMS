@@ -80,6 +80,32 @@ int tls_context_init(fim_tls_ctx_t *out,
     return 0;
 }
 
+SSL *fim_tls_wrap(fim_tls_ctx_t *ctx, int fd)
+{
+    if (!ctx || !ctx->ctx) return NULL;
+
+    SSL *ssl = SSL_new(ctx->ctx);
+    if (!ssl) {
+        syslog(LOG_ERR, "tls: SSL_new 실패");
+        return NULL;
+    }
+
+    SSL_set_fd(ssl, fd);
+
+    if (SSL_connect(ssl) != 1) {
+        unsigned long err = ERR_get_error();
+        char errbuf[256];
+        ERR_error_string_n(err, errbuf, sizeof(errbuf));
+        syslog(LOG_ERR, "tls: TLS 핸드셰이크 실패: %s", errbuf);
+        SSL_free(ssl);
+        return NULL;
+    }
+
+    syslog(LOG_INFO, "tls: TLS 핸드셰이크 성공 (protocol=%s)",
+           SSL_get_version(ssl));
+    return ssl;
+}
+
 void tls_context_free(fim_tls_ctx_t *ctx)
 {
     if (ctx && ctx->ctx) {

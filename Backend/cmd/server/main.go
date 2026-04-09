@@ -27,7 +27,6 @@ func main() {
 
 	agentStore := store.NewMySQLAgentStore(db.Conn)
 	eventStore := store.NewMySQLEventStore(db.Conn)
-	scanStore := store.NewMySQLScanStore(db.Conn)
 	alertStore := store.NewMySQLAlertStore(db.Conn)
 
 	publisher := api.NewSSEPublisher()
@@ -43,7 +42,6 @@ func main() {
 		tlsCfg,
 		agentStore,
 		eventStore,
-		scanStore,
 		alertStore,
 		publisher,
 		processor.Process,

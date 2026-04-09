@@ -17,10 +17,9 @@ const (
 // 메시지 Type
 
 const (
-	MsgRegister   uint8 = 0x01
-	MsgHeartbeat  uint8 = 0x02
-	MsgFileEvent  uint8 = 0x03
-	MsgScanResult uint8 = 0x04
+	MsgRegister  uint8 = 0x01
+	MsgHeartbeat uint8 = 0x02
+	MsgFileEvent uint8 = 0x03
 )
 
 // 이벤트 Type
@@ -36,8 +35,8 @@ const (
 // 모니터 Type
 
 const (
-	MonInotify uint8 = 0x01
-	MonEbpf    uint8 = 0x03
+	MonLkm  uint8 = 0x02
+	MonEbpf uint8 = 0x03
 )
 
 // agent 상태
@@ -91,27 +90,6 @@ type FileEventMsg struct {
 	DetectedBy     uint8
 	Pid            uint32
 	Timestamp      uint32
-}
-
-// ScanFile : SCAN_RESULT 내 개별 파일 항목
-type ScanFile struct {
-	FilePath       string
-	FileName       string
-	FileHash       [32]byte
-	FilePermission uint16
-	Size           uint32
-	ModTime        uint32
-	Changed        bool
-}
-
-// ScanResultMsg : 0x04 SCAN_RESULT 페이로드
-type ScanResultMsg struct {
-	AgentID   uint64
-	ScanPath  string
-	Total     uint32
-	Changed   uint32
-	Timestamp uint32
-	Files     []ScanFile
 }
 
 // 바이너리 읽기 헬퍼
@@ -389,85 +367,6 @@ func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
 	return msg, nil
 }
 
-// DecodeScanResult : 0x04 SCAN_RESULT 바이너리 -> ScanResultMsg
-func DecodeScanResult(data []byte) (*ScanResultMsg, error) {
-	r := newBinReader(data)
-
-	agentID, err := r.readU64()
-	if err != nil {
-		return nil, err
-	}
-	scanPath, err := r.readStr()
-	if err != nil {
-		return nil, err
-	}
-	total, err := r.readU32()
-	if err != nil {
-		return nil, err
-	}
-	changed, err := r.readU32()
-	if err != nil {
-		return nil, err
-	}
-	timestamp, err := r.readU32()
-	if err != nil {
-		return nil, err
-	}
-	fileCount, err := r.readU16()
-	if err != nil {
-		return nil, err
-	}
-
-	files := make([]ScanFile, fileCount)
-	for i := 0; i < int(fileCount); i++ {
-		fp, err := r.readStr()
-		if err != nil {
-			return nil, err
-		}
-		fn, err := r.readStr()
-		if err != nil {
-			return nil, err
-		}
-		hash, err := r.readBytes(32)
-		if err != nil {
-			return nil, err
-		}
-		perm, err := r.readU16()
-		if err != nil {
-			return nil, err
-		}
-		size, err := r.readU32()
-		if err != nil {
-			return nil, err
-		}
-		modTime, err := r.readU32()
-		if err != nil {
-			return nil, err
-		}
-		ch, err := r.readU8()
-		if err != nil {
-			return nil, err
-		}
-
-		copy(files[i].FileHash[:], hash)
-		files[i].FilePath = fp
-		files[i].FileName = fn
-		files[i].FilePermission = perm
-		files[i].Size = size
-		files[i].ModTime = modTime
-		files[i].Changed = ch != 0
-	}
-
-	return &ScanResultMsg{
-		AgentID:   agentID,
-		ScanPath:  scanPath,
-		Total:     total,
-		Changed:   changed,
-		Timestamp: timestamp,
-		Files:     files,
-	}, nil
-}
-
 // 인코딩
 
 // EncodeRegisterResp : agent_id -> REGISTER ACK 바이너리
@@ -500,8 +399,8 @@ func EventTypeName(t uint8) string {
 // MonitorTypeName : 모니터 Type uint8 -> 문자열
 func MonitorTypeName(t uint8) string {
 	switch t {
-	case MonInotify:
-		return "inotify"
+	case MonLkm:
+		return "lkm"
 	case MonEbpf:
 		return "ebpf"
 	default:

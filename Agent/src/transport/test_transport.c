@@ -4,7 +4,7 @@
  * 사용법:
  *   ./test_transport <server_host> <server_port>
  *
- * 인증서 기본 경로 (~/fim-agent/certs/):
+ * 인증서 기본 경로 (~/agent/certs/):
  *   ca.crt, agent.crt, agent.key
  *
  * 동작:
@@ -42,16 +42,15 @@ static void get_hostname(char *buf, size_t len)
     buf[len - 1] = '\0';
 }
 
-static void get_local_ip(const char *server_host, char *buf, size_t len)
+static void get_local_ip(const char *server_host, int port, char *buf, size_t len)
 {
-    /* 서버쪽으로 UDP 연결(실제 패킷 없음)을 통해 로컬 IP 확인 */
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) { strncpy(buf, "0.0.0.0", len); return; }
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port   = htons(9000);
+    addr.sin_port   = htons((uint16_t)port);
     inet_pton(AF_INET, server_host, &addr.sin_addr);
     connect(sock, (struct sockaddr *)&addr, sizeof(addr));
 
@@ -62,12 +61,12 @@ static void get_local_ip(const char *server_host, char *buf, size_t len)
     close(sock);
 }
 
-/* ── 인증서 기본 경로 빌드 (~/fim-agent/certs/) ──── */
+/* ── 인증서 기본 경로 빌드 (~/agent/certs/) ──── */
 static void build_cert_path(char *buf, size_t len, const char *filename)
 {
     const char *home = getenv("HOME");
     if (!home) home = "/home/user";
-    snprintf(buf, len, "%s/fim-agent/certs/%s", home, filename);
+    snprintf(buf, len, "%s/agent/certs/%s", home, filename);
 }
 
 /* ── 메인 ────────────────────────────────────────── */
@@ -84,7 +83,7 @@ int main(int argc, char *argv[])
     const char *server_host = argv[1];
     int         server_port = atoi(argv[2]);
 
-    /* 인증서 경로 — ~/fim-agent/certs/ 고정 */
+    /* 인증서 경로 — ~/agent/certs/ 고정 */
     char ca_crt[512], agent_crt[512], agent_key[512];
     build_cert_path(ca_crt,    sizeof(ca_crt),    "ca.crt");
     build_cert_path(agent_crt, sizeof(agent_crt), "agent.crt");
@@ -107,16 +106,15 @@ int main(int argc, char *argv[])
     /* ── Step 2: TCP + mTLS 연결 ─────────────────── */
     printf("[2] 서버 연결 중... (%s:%d)\n", server_host, server_port);
     fim_tcp_client_t client;
-    memset(&client, 0, sizeof(client));
-    client.tls_ctx  = &tls_ctx;
-    client.host     = server_host;
-    client.port     = server_port;
-    client.sockfd   = -1;
-    client.ssl      = NULL;
-    client.connected = 0;
+    if (fim_tcp_init(&client, &tls_ctx, server_host, (uint16_t)server_port) < 0) {
+        fprintf(stderr, "TCP 클라이언트 초기화 실패\n");
+        tls_context_free(&tls_ctx);
+        return 1;
+    }
 
-    if (tcp_client_connect(&client) < 0) {
+    if (fim_tcp_connect(&client) < 0) {
         fprintf(stderr, "서버 연결 실패 (%s:%d)\n", server_host, server_port);
+        fim_tcp_free(&client);
         tls_context_free(&tls_ctx);
         return 1;
     }
@@ -127,12 +125,13 @@ int main(int argc, char *argv[])
     char hostname[256] = {0};
     char local_ip[64]  = {0};
     get_hostname(hostname, sizeof(hostname));
-    get_local_ip(server_host, local_ip, sizeof(local_ip));
+    get_local_ip(server_host, server_port, local_ip, sizeof(local_ip));
 
     char agent_id[128] = {0};
-    if (tcp_client_register(&client, hostname, local_ip,"0.1.0", "Linux", "inotify", agent_id, sizeof(agent_id)) < 0) {
+    if (fim_tcp_register(&client, hostname, local_ip, FIM_MON_EBPF,
+                         "Linux", agent_id, sizeof(agent_id)) < 0) {
         fprintf(stderr, "REGISTER 실패\n");
-        tcp_client_disconnect(&client);
+        fim_tcp_free(&client);
         tls_context_free(&tls_ctx);
         return 1;
     }
@@ -156,7 +155,7 @@ int main(int argc, char *argv[])
         fim_event_t ev;
         memset(&ev, 0, sizeof(ev));
         ev.type      = test_types[i];
-        ev.source    = FIM_SOURCE_INOTIFY;
+        ev.source    = FIM_SOURCE_EBPF;
         ev.timestamp = time(NULL);
         ev.pid       = 0;
 
@@ -166,7 +165,7 @@ int main(int argc, char *argv[])
         strncpy(ev.filename, slash ? slash + 1 : test_paths[i],
                 sizeof(ev.filename) - 1);
 
-        if (tcp_client_send_event(&client, agent_id, &ev) == 0) {
+        if (fim_tcp_send_event(&client, &ev) == 0) {
             printf("\t[FILE_EVENT %d] %s → %s\n",
                    i + 1, fim_event_type_str(ev.type), ev.path);
         } else {
@@ -178,14 +177,16 @@ int main(int argc, char *argv[])
     /* ── Step 5: HEARTBEAT 3회 ───────────────────── */
     printf("[5] HEARTBEAT 전송 (3회, 5초 간격)...\n");
     for (int i = 0; i < 3; i++) {
-        char json[256];
-        snprintf(json, sizeof(json),
-            "{\"agent_id\":\"%s\","
-            "\"status\":\"online\","
-            "\"timestamp\":%ld}",
-            agent_id, (long)time(NULL));
+        fim_msg_heartbeat_t hb = {
+            .agent_id = client.agent_id,
+            .status = FIM_STATUS_HEALTHY,
+            .timestamp = (uint32_t)time(NULL),
+        };
+        uint8_t buf[13];
+        int len = fim_heartbeat_encode(&hb, buf, sizeof(buf));
 
-        if (fim_send_frame(client.ssl, FIM_MSG_HEARTBEAT, json) == 0) {
+        if (len >= 0 &&
+            fim_tcp_send_frame(&client, FIM_MSG_HEARTBEAT, buf, (uint32_t)len) == 0) {
             printf("\tHEARTBEAT %d 전송\n", i + 1);
         } else {
             printf("\tHEARTBEAT %d 전송 실패\n", i + 1);
@@ -196,7 +197,7 @@ int main(int argc, char *argv[])
 
     /* ── Step 6: 정리 ────────────────────────────── */
     printf("[6] 연결 종료...\n");
-    tcp_client_disconnect(&client);
+    fim_tcp_free(&client);
     tls_context_free(&tls_ctx);
     printf("\t테스트 완료\n");
     return 0;

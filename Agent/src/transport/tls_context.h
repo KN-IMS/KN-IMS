@@ -13,6 +13,8 @@ int  tls_context_init(fim_tls_ctx_t *out,
                       const char *agent_crt,
                       const char *agent_key);
 
+SSL *fim_tls_wrap(fim_tls_ctx_t *ctx, int fd);
+
 void tls_context_free(fim_tls_ctx_t *ctx);
 
 #endif /* FIM_TLS_CONTEXT_H */
