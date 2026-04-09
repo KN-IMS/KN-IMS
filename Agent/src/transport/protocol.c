@@ -181,7 +181,7 @@ int fim_file_event_encode(const fim_msg_file_event_t *msg, uint8_t *buf, size_t 
     size_t need = 8 + 1
         + 2 + msg->file_path_len
         + 2 + msg->file_name_len
-        + 32 + 2 + 1 + 4 + 4;
+        + 2 + 1 + 4 + 4;
     if (need > buf_size) return -1;
 
     uint8_t *p = buf;
@@ -189,7 +189,6 @@ int fim_file_event_encode(const fim_msg_file_event_t *msg, uint8_t *buf, size_t 
     write_u8(&p, msg->event_type);
     write_str(&p, msg->file_path, msg->file_path_len);
     write_str(&p, msg->file_name, msg->file_name_len);
-    write_bytes(&p, msg->file_hash, 32);
     write_u16(&p, msg->file_permission);
     write_u8(&p, msg->detected_by);
     write_u32(&p, msg->pid);
@@ -199,7 +198,7 @@ int fim_file_event_encode(const fim_msg_file_event_t *msg, uint8_t *buf, size_t 
 
 int fim_file_event_decode(const uint8_t *buf, size_t len, fim_msg_file_event_t *msg)
 {
-    if (len < 56) return -1;
+    if (len < 24) return -1;
 
     const uint8_t *p = buf;
     const uint8_t *end = buf + len;
@@ -209,9 +208,7 @@ int fim_file_event_decode(const uint8_t *buf, size_t len, fim_msg_file_event_t *
     msg->file_path = read_str(&p, &msg->file_path_len);
     msg->file_name = read_str(&p, &msg->file_name_len);
 
-    if (p + 43 > end) return -1;
-
-    read_bytes(&p, msg->file_hash, 32);
+    if (p + 11 > end) return -1;
     msg->file_permission = read_u16(&p);
     msg->detected_by = read_u8(&p);
     msg->pid = read_u32(&p);

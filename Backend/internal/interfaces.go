@@ -29,7 +29,6 @@ type FileEventPayload struct {
 	EventType      string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
 	FilePath       string
 	FileName       string
-	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
 	DetectedBy     string // lkm, ebpf
 	Pid            int
@@ -79,7 +78,6 @@ type FileEvent struct {
 	EventType      string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
 	FilePath       string
 	FileName       string
-	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
 	DetectedBy     string // lkm, ebpf
 	Pid            int    // PID를 제공하지 않는 이벤트는 0

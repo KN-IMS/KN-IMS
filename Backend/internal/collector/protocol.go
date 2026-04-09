@@ -85,7 +85,6 @@ type FileEventMsg struct {
 	EventType      uint8
 	FilePath       string
 	FileName       string
-	FileHash       [32]byte
 	FilePermission uint16
 	DetectedBy     uint8
 	Pid            uint32
@@ -314,6 +313,10 @@ func DecodeHeartbeat(data []byte) (*HeartbeatMsg, error) {
 
 // DecodeFileEvent : 0x03 FILE_EVENT 바이너리 -> FileEventMsg
 func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
+	if len(data) < 24 {
+		return nil, fmt.Errorf("FILE_EVENT 크기 부족: %d", len(data))
+	}
+
 	r := newBinReader(data)
 
 	agentID, err := r.readU64()
@@ -329,10 +332,6 @@ func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
 		return nil, err
 	}
 	fileName, err := r.readStr()
-	if err != nil {
-		return nil, err
-	}
-	hashBytes, err := r.readBytes(32)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +352,7 @@ func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
 		return nil, err
 	}
 
-	msg := &FileEventMsg{
+	return &FileEventMsg{
 		AgentID:        agentID,
 		EventType:      evtType,
 		FilePath:       filePath,
@@ -362,9 +361,7 @@ func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
 		DetectedBy:     detectedBy,
 		Pid:            pid,
 		Timestamp:      timestamp,
-	}
-	copy(msg.FileHash[:], hashBytes)
-	return msg, nil
+	}, nil
 }
 
 // 인코딩

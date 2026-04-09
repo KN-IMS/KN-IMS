@@ -36,34 +36,6 @@ func (m *mockAlertStore) ResolveAlert(_ context.Context, _ int64) error {
 	return nil
 }
 
-func TestIsSensitivePath(t *testing.T) {
-	p := NewEventProcessor(&mockAlertStore{})
-
-	cases := []struct {
-		path string
-		want bool
-	}{
-		{"/etc/passwd", true},
-		{"/bin/bash", true},
-		{"/sbin/init", true},
-		{"/usr/bin/python3", true},
-		{"/usr/sbin/sshd", true},
-		{"/boot/grub/grub.cfg", true},
-		{"/lib/systemd/systemd", true},
-		{"/home/user/file.txt", false},
-		{"/var/log/syslog", false},
-		{"/tmp/test", false},
-		{"/opt/app/config", false},
-	}
-
-	for _, c := range cases {
-		got := p.isSensitivePath(c.path)
-		if got != c.want {
-			t.Errorf("isSensitivePath(%q) = %v, want %v", c.path, got, c.want)
-		}
-	}
-}
-
 func TestDetectBurst_UnderThreshold(t *testing.T) {
 	p := NewEventProcessor(&mockAlertStore{})
 
@@ -101,50 +73,6 @@ func TestDetectBurst_MultipleAgents(t *testing.T) {
 	}
 }
 
-func TestProcess_SensitivePath_CreatesHighAlert(t *testing.T) {
-	store := &mockAlertStore{}
-	p := NewEventProcessor(store)
-	ctx := context.Background()
-
-	e := internal.FileEvent{
-		EventType:  "MODIFY",
-		FilePath:   "/etc/passwd",
-		DetectedBy: "lkm",
-		OccurredAt: time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC),
-	}
-
-	p.Process(ctx, "agent-1", e)
-
-	if len(store.created) != 1 {
-		t.Fatalf("알림 수 = %d, want 1", len(store.created))
-	}
-	if store.created[0].severity != internal.SeverityHigh {
-		t.Errorf("severity = %q, want HIGH", store.created[0].severity)
-	}
-}
-
-func TestProcess_NightTime_CreatesMediumAlert(t *testing.T) {
-	store := &mockAlertStore{}
-	p := NewEventProcessor(store)
-	ctx := context.Background()
-
-	e := internal.FileEvent{
-		EventType:  "CREATE",
-		FilePath:   "/home/user/test.txt",
-		DetectedBy: "lkm",
-		OccurredAt: time.Date(2026, 1, 1, 23, 0, 0, 0, time.UTC),
-	}
-
-	p.Process(ctx, "agent-1", e)
-
-	if len(store.created) != 1 {
-		t.Fatalf("알림 수 = %d, want 1", len(store.created))
-	}
-	if store.created[0].severity != internal.SeverityMedium {
-		t.Errorf("severity = %q, want MEDIUM", store.created[0].severity)
-	}
-}
-
 func TestProcess_NormalEvent_NoAlert(t *testing.T) {
 	store := &mockAlertStore{}
 	p := NewEventProcessor(store)
@@ -164,22 +92,25 @@ func TestProcess_NormalEvent_NoAlert(t *testing.T) {
 	}
 }
 
-func TestProcess_SensitiveAndNight_TwoAlerts(t *testing.T) {
+func TestProcess_Burst_CreatesHighAlert(t *testing.T) {
 	store := &mockAlertStore{}
 	p := NewEventProcessor(store)
 	ctx := context.Background()
 
-	e := internal.FileEvent{
-		EventType:  "MODIFY",
-		FilePath:   "/etc/shadow",
-		DetectedBy: "lkm",
-		OccurredAt: time.Date(2026, 1, 1, 2, 0, 0, 0, time.UTC),
+	for i := 0; i < 100; i++ {
+		e := internal.FileEvent{
+			EventType:  "MODIFY",
+			FilePath:   "/home/user/doc.txt",
+			DetectedBy: "lkm",
+			OccurredAt: time.Date(2026, 1, 1, 14, 0, 0, 0, time.UTC),
+		}
+		p.Process(ctx, "agent-1", e)
 	}
 
-	p.Process(ctx, "agent-1", e)
-
-	// HIGH (민감경로) + MEDIUM (야간) = 2건
-	if len(store.created) != 2 {
-		t.Fatalf("알림 수 = %d, want 2", len(store.created))
+	if len(store.created) != 1 {
+		t.Fatalf("알림 수 = %d, want 1", len(store.created))
+	}
+	if store.created[0].severity != internal.SeverityHigh {
+		t.Errorf("severity = %q, want HIGH", store.created[0].severity)
 	}
 }

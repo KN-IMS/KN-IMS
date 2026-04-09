@@ -5,9 +5,8 @@
  *   ┌──────────────────────────────────────────────────────┐
  *   │                   FIM Monitor 데몬                    │
  *   │                                                      │
- *   │  kernel < 5.8              kernel >= 5.8             │
- *   │  [inotify 스레드]          [eBPF poll 스레드]        │
- *   │   재귀 디렉토리 감시        LSM 훅 → audit 이벤트    │
+ *   │  [LKM 이벤트 스레드]        [eBPF poll 스레드]        │
+ *   │   /dev/fim_lkm 수신         LSM 훅 → audit 이벤트    │
  *   │          │                     │                     │
  *   │          └─────────────────────┘                     │
  *   │                      ▼                               │
@@ -20,8 +19,10 @@
  *   │  [스레드 3: heartbeat]  30초 주기 HEARTBEAT 전송       │
  *   └──────────────────────────────────────────────────────┘
  *
- * kernel < 5.8 → inotify 단독 (모니터링만, 차단 불가)
- * kernel >= 5.8 → eBPF 단독 (inotify 비활성화)
+ * 우선순위:
+ *   eBPF 가능 → eBPF
+ *   eBPF 불가 + /dev/fim_lkm 존재 → LKM
+ *   둘 다 불가 → inotify fallback
  *
  * 환경변수 (transport 설정):
  *   FIM_SERVER_HOST   서버 IP/호스트 (기본: 127.0.0.1)
@@ -219,7 +220,8 @@ static void *backend_thread(void *arg) {
 
 static void send_event_with_reconnect(const fim_event_t *ev) {
     if (!g_transport_ok || !g_agent_id[0]) return;
-    if (fim_tcp_send_event(&g_tcp_client, ev) < 0) {
+    int ret = fim_tcp_send_event(&g_tcp_client, ev);
+    if (ret == -2) {
         LOG_WARN_FIM("[transport] FILE_EVENT 전송 실패 — 재연결 시도");
         g_transport_ok = 0;
         if (fim_tcp_reconnect(&g_tcp_client) == 0) {
@@ -228,6 +230,8 @@ static void send_event_with_reconnect(const fim_event_t *ev) {
             g_transport_ok = 1;
             fim_tcp_send_event(&g_tcp_client, ev);
         }
+    } else if (ret < 0) {
+        LOG_WARN_FIM("[transport] FILE_EVENT 전송 실패 (재시도 예정)");
     }
 }
 
@@ -837,9 +841,8 @@ int main(int argc, char *argv[]) {
     }
 #endif /* HAVE_LIBBPF */
 
-    /* ── inotify 백엔드 시작 ──────────────────────
-     * kernel >= 5.8 에서 eBPF가 활성화된 경우 inotify는 사용하지 않는다.
-     * inotify는 kernel < 5.8 폴백 전용 또는 eBPF 비활성 환경에서만 동작한다. */
+    /* ── inotify fallback 시작 ─────────────────────
+     * eBPF, LKM 둘 다 사용할 수 없을 때만 inotify를 폴백으로 사용한다. */
     pthread_t    ino_thread = 0;
     thread_arg_t ino_arg    = {0};
 

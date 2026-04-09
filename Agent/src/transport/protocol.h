@@ -75,7 +75,6 @@ typedef struct {
     char    *file_path;
     uint16_t file_name_len;
     char    *file_name;
-    uint8_t  file_hash[32];
     uint16_t file_permission;
     uint8_t  detected_by;
     uint32_t pid;
