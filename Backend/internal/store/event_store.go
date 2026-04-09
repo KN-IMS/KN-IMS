@@ -21,12 +21,12 @@ func NewMySQLEventStore(db *sql.DB) internal.EventStore {
 // SaveEvent : 파일 이벤트 DB 저장
 func (s *MySQLEventStore) SaveEvent(ctx context.Context, p internal.FileEventPayload) error {
 	query := `
-		INSERT INTO file_events (agent_id, event_type, file_path, file_name, file_hash, file_permission, detected_by, pid, occurred_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		INSERT INTO file_events (agent_id, event_type, file_path, file_name, file_permission, detected_by, pid, occurred_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := s.db.ExecContext(ctx, query,
 		p.AgentID, p.EventType, p.FilePath, p.FileName,
-		p.FileHash, p.FilePermission, p.DetectedBy, p.Pid,
+		p.FilePermission, p.DetectedBy, p.Pid,
 		time.Unix(p.Timestamp, 0),
 	)
 	return err
@@ -34,7 +34,7 @@ func (s *MySQLEventStore) SaveEvent(ctx context.Context, p internal.FileEventPay
 
 // QueryEvents : 필터 기반 이벤트 조회
 func (s *MySQLEventStore) QueryEvents(ctx context.Context, f internal.EventFilter) ([]internal.FileEvent, error) {
-	query := `SELECT id, agent_id, event_type, file_path, file_name, file_hash, file_permission, detected_by, pid, occurred_at, received_at FROM file_events WHERE 1=1`
+	query := `SELECT id, agent_id, event_type, file_path, file_name, file_permission, detected_by, pid, occurred_at, received_at FROM file_events WHERE 1=1`
 	args := []interface{}{}
 
 	if f.AgentID != "" {
@@ -74,7 +74,7 @@ func (s *MySQLEventStore) QueryEvents(ctx context.Context, f internal.EventFilte
 	var events []internal.FileEvent
 	for rows.Next() {
 		var e internal.FileEvent
-		err := rows.Scan(&e.ID, &e.AgentID, &e.EventType, &e.FilePath, &e.FileName, &e.FileHash, &e.FilePermission, &e.DetectedBy, &e.Pid, &e.OccurredAt, &e.ReceivedAt)
+		err := rows.Scan(&e.ID, &e.AgentID, &e.EventType, &e.FilePath, &e.FileName, &e.FilePermission, &e.DetectedBy, &e.Pid, &e.OccurredAt, &e.ReceivedAt)
 		if err != nil {
 			return nil, err
 		}

@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS file_events (
     event_type      VARCHAR(10)  NOT NULL,
     file_path       TEXT         NOT NULL,
     file_name       VARCHAR(255) NOT NULL,
-    file_hash       VARCHAR(64)  NOT NULL DEFAULT '',
     file_permission VARCHAR(10)  NOT NULL DEFAULT '',
     detected_by     VARCHAR(20)  NOT NULL DEFAULT 'lkm',
     pid             INT          NOT NULL DEFAULT 0,

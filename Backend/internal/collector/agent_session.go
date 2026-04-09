@@ -3,7 +3,6 @@ package collector
 import (
 	"context"
 	"crypto/tls"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -27,6 +26,22 @@ type AgentSession struct {
 	onEvent  func(ctx context.Context, agentID string, e internal.FileEvent)
 	sessions *sync.Map // 서버의 세션 맵 참조 -> 중복 연결 처리 + 검증
 	lastSeq  uint32    // seq_num 검증
+}
+
+func (s *AgentSession) validateAgentIdentity(agentNum uint64) bool {
+	if s.agentNum == 0 || s.AgentID == "" {
+		slog.Warn("등록되지 않은 세션의 메시지 수신")
+		s.conn.Close()
+		return false
+	}
+	if agentNum != s.agentNum {
+		slog.Warn("agent_id 불일치 -> 연결 끊음",
+			"session_agent_id", s.AgentID,
+			"payload_agent_id", strconv.FormatUint(agentNum, 10))
+		s.conn.Close()
+		return false
+	}
+	return true
 }
 
 // Run : 메시지 수신 루프 -> 연결 종료까지 실행
@@ -130,6 +145,9 @@ func (s *AgentSession) handleHeartbeat(payload []byte) {
 		slog.Warn("HEARTBEAT 디코딩 실패", "err", err)
 		return
 	}
+	if !s.validateAgentIdentity(hb.AgentID) {
+		return
+	}
 
 	agentID := strconv.FormatUint(hb.AgentID, 10)
 	if err := s.agents.UpdateHeartbeat(s.ctx, agentID, time.Unix(int64(hb.Timestamp), 0)); err != nil {
@@ -144,6 +162,9 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 		slog.Warn("FILE_EVENT 디코딩 실패", "err", err)
 		return
 	}
+	if !s.validateAgentIdentity(ev.AgentID) {
+		return
+	}
 
 	agentID := strconv.FormatUint(ev.AgentID, 10)
 
@@ -153,7 +174,6 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 		EventType:      EventTypeName(ev.EventType),
 		FilePath:       ev.FilePath,
 		FileName:       ev.FileName,
-		FileHash:       hex.EncodeToString(ev.FileHash[:]),
 		FilePermission: PermString(ev.FilePermission),
 		DetectedBy:     MonitorTypeName(ev.DetectedBy),
 		Pid:            int(ev.Pid),
@@ -163,6 +183,7 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 	// DB 저장
 	if err := s.events.SaveEvent(s.ctx, p); err != nil {
 		slog.Error("SaveEvent 실패", "err", err)
+		return
 	}
 
 	// SSE 실시간 push
@@ -171,7 +192,6 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 		EventType:      p.EventType,
 		FilePath:       p.FilePath,
 		FileName:       p.FileName,
-		FileHash:       p.FileHash,
 		FilePermission: p.FilePermission,
 		DetectedBy:     p.DetectedBy,
 		Pid:            p.Pid,

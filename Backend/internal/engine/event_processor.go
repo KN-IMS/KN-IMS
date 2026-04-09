@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,39 +28,11 @@ func NewEventProcessor(alerts internal.AlertStore) *EventProcessor {
 
 // Process : collector의 onEvent 콜백으로 호출
 func (p *EventProcessor) Process(ctx context.Context, agentID string, e internal.FileEvent) {
-	// 민감 경로 변경 감지 -> HIGH
-	if p.isSensitivePath(e.FilePath) {
-		msg := fmt.Sprintf("[민감경로 %s 변경 감지: %s (%s)]", e.EventType, e.FilePath, e.DetectedBy)
-		p.createAlert(ctx, agentID, internal.SeverityHigh, msg)
-	}
-
-	// 취약 시간대 변경 감지 -> default (22:00 ~ 06:00)
-	hour := e.OccurredAt.Hour()
-	if hour >= 22 || hour < 6 {
-		msg := fmt.Sprintf("[%s: %s (%02d시) 변경 감지]", e.EventType, e.FilePath, hour)
-		p.createAlert(ctx, agentID, internal.SeverityMedium, msg)
-	}
-
 	// Burst 감지 -> HIGH (1분 내 100건 이상)
 	if p.detectBurst(agentID) {
 		msg := fmt.Sprintf("[대량변경감지]")
 		p.createAlert(ctx, agentID, internal.SeverityHigh, msg)
 	}
-}
-
-// isSensitivePath : 민감 경로 여부 확인 -> 현재는 임의 설정
-func (p *EventProcessor) isSensitivePath(path string) bool {
-	sensitive := []string{
-		"/etc/", "/bin/", "/sbin/",
-		"/usr/bin/", "/usr/sbin/",
-		"/boot/", "/lib/",
-	}
-	for _, prefix := range sensitive {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
-	}
-	return false
 }
 
 // detectBurst : 1분 내 이벤트 100건 이상 -> true

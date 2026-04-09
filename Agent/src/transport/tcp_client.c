@@ -378,9 +378,8 @@ static uint8_t map_source(fim_event_source_t s)
         return FIM_MON_EBPF;
     case FIM_SOURCE_LKM:
         return FIM_MON_LKM;
-    case FIM_SOURCE_INOTIFY:
     default:
-        return FIM_MON_LKM;
+        return 0;
     }
 }
 
@@ -412,6 +411,12 @@ int fim_tcp_send_event(fim_tcp_client_t *cli, const fim_event_t *ev)
     msg.detected_by = map_source(ev->source);
     msg.pid = (uint32_t)ev->pid;
     msg.timestamp = (uint32_t)ev->timestamp;
+
+    if (msg.detected_by == 0) {
+        syslog(LOG_WARNING, "fim-tcp: 지원하지 않는 이벤트 source=%d — FILE_EVENT 전송 생략",
+               (int)ev->source);
+        return 0;
+    }
 
     uint8_t buf[8192];
     int len = fim_file_event_encode(&msg, buf, sizeof(buf));
