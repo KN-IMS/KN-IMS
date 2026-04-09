@@ -8,52 +8,52 @@ import (
 // 심각도 상수
 
 const (
-	SeverityHigh = "HIGH"
+	SeverityHigh   = "HIGH"
 	SeverityMedium = "MEDIUM"
-	SeverityLow = "LOW"
+	SeverityLow    = "LOW"
 )
 
 // 페이로드 타입
 
 // RegisterPayload : 에이전트 -> 서버 등록 정보
 type RegisterPayload struct {
-	Hostname string
-	IP string
-	OS string
+	Hostname    string
+	IP          string
+	OS          string
 	MonitorType string // inotify, fanotify, ebpf, both, all
 }
 
 // FileEventPayload : 에이전트 -> 서버 파일 변경 이벤트
 type FileEventPayload struct {
-	AgentID string
-	EventType string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
-	FilePath string
-	FileName string
-	FileHash string // SHA-256 hex
+	AgentID        string
+	EventType      string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
+	FilePath       string
+	FileName       string
+	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
-	DetectedBy string // inotify, fanotify, ebpf
-	Pid int
-	Timestamp int64
+	DetectedBy     string // inotify, fanotify, ebpf
+	Pid            int
+	Timestamp      int64
 }
 
 // ScanFileEntry : 스캔된 개별 파일 항목
 type ScanFileEntry struct {
-	FilePath string
-	FileName string
-	FileHash string // SHA-256 hex
+	FilePath       string
+	FileName       string
+	FileHash       string // SHA-256 hex
 	FilePermission string // ex) 0644
-	Size int64
-	ModTime int64
-	Changed bool
+	Size           int64
+	ModTime        int64
+	Changed        bool
 }
 
 // ScanResultPayload : 에이전트 -> 서버 스캔 결과
 type ScanResultPayload struct {
-	AgentID string
-	ScanPath string
-	Files []ScanFileEntry
-	Total int
-	Changed int
+	AgentID   string
+	ScanPath  string
+	Files     []ScanFileEntry
+	Total     int
+	Changed   int
 	Timestamp int64
 }
 
@@ -61,15 +61,15 @@ type ScanResultPayload struct {
 
 // Agent : DB에 저장되는 에이전트 정보
 type Agent struct {
-	AgentID string
-	Hostname string
-	IP string
-	Version string
-	OS string
-	MonitorType string // inotify, fanotify, ebpf, both, all
-	Status string // online, offline
+	AgentID      string
+	Hostname     string
+	IP           string
+	Version      string
+	OS           string
+	MonitorType  string // inotify, fanotify, ebpf, both, all
+	Status       string // online, offline
 	RegisteredAt time.Time
-	LastSeen time.Time
+	LastSeen     time.Time
 }
 
 // AgentStore : 에이전트 등록/조회/상태 관리
@@ -95,27 +95,27 @@ type AgentStore interface {
 
 // FileEvent : DB에 저장되는 파일 이벤트
 type FileEvent struct {
-	ID int64
-	AgentID string
-	EventType string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
-	FilePath string
-	FileName string
-	FileHash string // SHA-256 hex
+	ID             int64
+	AgentID        string
+	EventType      string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
+	FilePath       string
+	FileName       string
+	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
-	DetectedBy string // inotify, fanotify, ebpf
-	Pid int // fanotify만 유효, 나머지 0
-	OccurredAt time.Time
-	ReceivedAt time.Time
+	DetectedBy     string // inotify, fanotify, ebpf
+	Pid            int    // fanotify만 유효, 나머지 0
+	OccurredAt     time.Time
+	ReceivedAt     time.Time
 }
 
 // EventFilter : GET /api/events 쿼리 파라미터
 type EventFilter struct {
-	AgentID string
+	AgentID   string
 	EventType string
-	From time.Time
-	To time.Time
-	Limit int
-	Offset int
+	From      time.Time
+	To        time.Time
+	Limit     int
+	Offset    int
 }
 
 // EventStore : 파일 이벤트 저장/조회
@@ -140,12 +140,12 @@ type EventPublisher interface {
 // ScanResult 도메인
 // ScanResult : DB에 저장되는 스캔 결과 요약
 type ScanResult struct {
-	ID int64
-	AgentID string
-	ScanType string // baseline, integrity
-	ScanPath string
-	Total int
-	Changed int
+	ID        int64
+	AgentID   string
+	ScanType  string // baseline, integrity
+	ScanPath  string
+	Total     int
+	Changed   int
 	ScannedAt time.Time
 }
 
@@ -164,22 +164,22 @@ type ScanStore interface {
 
 // Alert : engine 이상 감지 시 생성되는 알림
 type Alert struct {
-	ID int64
-	AgentID string
-	Severity string // HIGH, MEDIUM, LOW
-	Message string
-	Resolved bool
+	ID        int64
+	AgentID   string
+	Severity  string // HIGH, MEDIUM, LOW
+	Message   string
+	Resolved  bool
 	CreatedAt time.Time
 }
 
 // AlertFilter : GET /api/alerts 쿼리 파라미터
 type AlertFilter struct {
-	AgentID string
+	AgentID  string
 	Severity string
 	Resolved *bool // nil=전체, true=해결, false=미해결
-	From time.Time
-	Limit int
-	Offset int
+	From     time.Time
+	Limit    int
+	Offset   int
 }
 
 // AlertStore : 알림 생성/조회/해결
@@ -191,21 +191,4 @@ type AlertStore interface {
 	ListAlerts(ctx context.Context, filter AlertFilter) ([]Alert, error)
 	// ResolveAlert : PATCH /api/alerts/:id/resolve -> 알림 해결 처리
 	ResolveAlert(ctx context.Context, alertID int64) error
-}
-
-// Command 도메인
-// CommandSender : 서버 -> 에이전트 TCP 명령 전송
-// 구현 : internal/collector/tcp_server.go
-// 호출 : internal/api/command_handler.go
-type CommandSender interface {
-	// SendCreateBaseline : POST /api/agents/:id/baseline -> 0x05 CREATE_BASELINE
-	SendCreateBaseline(ctx context.Context, agentID string, path string) error
-	// SendIntegrityScan : POST /api/agents/:id/scan -> 0x05 INTEGRITY_SCAN
-	SendIntegrityScan(ctx context.Context, agentID string, path string) error
-	// SendAddWatch : watch 경로 추가 -> 0x05 ADD_WATCH
-	SendAddWatch(ctx context.Context, agentID string, path string, recursive bool) error
-	// SendRemoveWatch : watch 경로 제거 -> 0x05 REMOVE_WATCH
-	SendRemoveWatch(ctx context.Context, agentID string, path string) error
-	// SendConfigUpdate : 설정 업데이트 -> 0x05 CONFIG_UPDATE
-	SendConfigUpdate(ctx context.Context, agentID string, args string) error
 }

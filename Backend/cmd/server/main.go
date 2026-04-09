@@ -49,7 +49,7 @@ func main() {
 		processor.Process,
 	)
 
-	server := api.NewServer(agentStore, eventStore, scanStore, alertStore, publisher, tcpServer)
+	server := api.NewServer(agentStore, eventStore, scanStore, alertStore, publisher)
 
 	errCh := make(chan error, 2)
 

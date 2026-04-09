@@ -9,13 +9,12 @@ import (
 
 // Server : REST API 서버
 type Server struct {
-	router        *gin.Engine
-	agentStore    internal.AgentStore
-	eventStore    internal.EventStore
-	scanStore     internal.ScanStore
-	alertStore    internal.AlertStore
-	publisher     internal.EventPublisher
-	commandSender internal.CommandSender
+	router     *gin.Engine
+	agentStore internal.AgentStore
+	eventStore internal.EventStore
+	scanStore  internal.ScanStore
+	alertStore internal.AlertStore
+	publisher  internal.EventPublisher
 }
 
 // NewServer : 서버 생성
@@ -25,18 +24,16 @@ func NewServer(
 	scanStore internal.ScanStore,
 	alertStore internal.AlertStore,
 	publisher internal.EventPublisher,
-	commandSender internal.CommandSender,
 ) *Server {
 	router := gin.Default()
 
 	s := &Server{
-		router:        router,
-		agentStore:    agentStore,
-		eventStore:    eventStore,
-		scanStore:     scanStore,
-		alertStore:    alertStore,
-		publisher:     publisher,
-		commandSender: commandSender,
+		router:     router,
+		agentStore: agentStore,
+		eventStore: eventStore,
+		scanStore:  scanStore,
+		alertStore: alertStore,
+		publisher:  publisher,
 	}
 
 	s.registerRoutes()
@@ -57,10 +54,6 @@ func (s *Server) registerRoutes() {
 	// Event API
 	api.GET("/events", s.handleQueryEvents)
 	api.GET("/events/stream", s.handleSSE)
-
-	// Command API
-	api.POST("/agents/:id/baseline", s.handleCreateBaseline)
-	api.POST("/agents/:id/scan", s.handleIntegrityScan)
 
 	// Alert API
 	api.GET("/alerts", s.handleListAlerts)
