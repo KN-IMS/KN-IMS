@@ -3,7 +3,7 @@ package api
 import (
 	"log"
 
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,7 +12,6 @@ type Server struct {
 	router     *gin.Engine
 	agentStore internal.AgentStore
 	eventStore internal.EventStore
-	scanStore  internal.ScanStore
 	alertStore internal.AlertStore
 	publisher  internal.EventPublisher
 }
@@ -21,7 +20,6 @@ type Server struct {
 func NewServer(
 	agentStore internal.AgentStore,
 	eventStore internal.EventStore,
-	scanStore internal.ScanStore,
 	alertStore internal.AlertStore,
 	publisher internal.EventPublisher,
 ) *Server {
@@ -31,7 +29,6 @@ func NewServer(
 		router:     router,
 		agentStore: agentStore,
 		eventStore: eventStore,
-		scanStore:  scanStore,
 		alertStore: alertStore,
 		publisher:  publisher,
 	}

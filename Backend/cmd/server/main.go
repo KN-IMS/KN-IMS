@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/KGU-FIMS/Backend/internal/api"
-	"github.com/KGU-FIMS/Backend/internal/collector"
-	"github.com/KGU-FIMS/Backend/internal/engine"
-	"github.com/KGU-FIMS/Backend/internal/store"
+	"github.com/KN-IMS/KN-IMS/Backend/internal/api"
+	"github.com/KN-IMS/KN-IMS/Backend/internal/collector"
+	"github.com/KN-IMS/KN-IMS/Backend/internal/engine"
+	"github.com/KN-IMS/KN-IMS/Backend/internal/store"
 )
 
 func main() {
@@ -49,7 +49,7 @@ func main() {
 		processor.Process,
 	)
 
-	server := api.NewServer(agentStore, eventStore, scanStore, alertStore, publisher)
+	server := api.NewServer(agentStore, eventStore, alertStore, publisher)
 
 	errCh := make(chan error, 2)
 

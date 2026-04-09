@@ -21,7 +21,6 @@ const (
 	MsgHeartbeat  uint8 = 0x02
 	MsgFileEvent  uint8 = 0x03
 	MsgScanResult uint8 = 0x04
-	MsgCommand    uint8 = 0x05
 )
 
 // 이벤트 Type
@@ -49,24 +48,6 @@ const (
 	StatusHealthy uint8 = 0x03
 	StatusWarning uint8 = 0x04
 	StatusError   uint8 = 0x05
-)
-
-// COMMAND Type
-
-const (
-	CmdCreateBaseline uint8 = 0x01
-	CmdIntegrityScan  uint8 = 0x02
-	CmdAddWatch       uint8 = 0x03
-	CmdRemoveWatch    uint8 = 0x04
-	CmdConfigUpdate   uint8 = 0x05
-)
-
-// CONFIG_UPDATE Type
-
-const (
-	CfgHeartbeatInterval uint8 = 0x01
-	CfgLogLevel          uint8 = 0x02
-	CfgMonitorType       uint8 = 0x03
 )
 
 // 프레임 헤더 구조체
@@ -131,20 +112,6 @@ type ScanResultMsg struct {
 	Changed   uint32
 	Timestamp uint32
 	Files     []ScanFile
-}
-
-// CommandArgs : CONFIG_UPDATE 인자 -> 3 bytes 고정
-type CommandArgs struct {
-	ConfigType uint8
-	Value      [2]byte
-}
-
-// CommandMsg : 0x05 COMMAND 페이로드
-type CommandMsg struct {
-	Type      uint8
-	Path      string
-	Recursive bool
-	Args      CommandArgs
 }
 
 // 바이너리 읽기 헬퍼
@@ -501,63 +468,12 @@ func DecodeScanResult(data []byte) (*ScanResultMsg, error) {
 	}, nil
 }
 
-// DecodeCommand : 0x05 COMMAND 바이너리 -> CommandMsg
-func DecodeCommand(data []byte) (*CommandMsg, error) {
-	r := newBinReader(data)
-
-	cmdType, err := r.readU8()
-	if err != nil {
-		return nil, err
-	}
-	path, err := r.readStr()
-	if err != nil {
-		return nil, err
-	}
-	recursive, err := r.readU8()
-	if err != nil {
-		return nil, err
-	}
-	cfgType, err := r.readU8()
-	if err != nil {
-		return nil, err
-	}
-	valBytes, err := r.readBytes(2)
-	if err != nil {
-		return nil, err
-	}
-
-	return &CommandMsg{
-		Type:      cmdType,
-		Path:      path,
-		Recursive: recursive != 0,
-		Args: CommandArgs{
-			ConfigType: cfgType,
-			Value:      [2]byte{valBytes[0], valBytes[1]},
-		},
-	}, nil
-}
-
 // 인코딩
 
 // EncodeRegisterResp : agent_id -> REGISTER ACK 바이너리
 func EncodeRegisterResp(agentID uint64) []byte {
 	w := newBinWriter(8)
 	w.writeU64(agentID)
-	return w.bytes()
-}
-
-// EncodeCommand : CommandMsg -> COMMAND 바이너리
-func EncodeCommand(cmd *CommandMsg) []byte {
-	w := newBinWriter(64)
-	w.writeU8(cmd.Type)
-	w.writeStr(cmd.Path)
-	if cmd.Recursive {
-		w.writeU8(1)
-	} else {
-		w.writeU8(0)
-	}
-	w.writeU8(cmd.Args.ConfigType)
-	w.writeBytes(cmd.Args.Value[:])
 	return w.bytes()
 }
 

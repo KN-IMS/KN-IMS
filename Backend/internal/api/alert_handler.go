@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 	"github.com/gin-gonic/gin"
-	"github.com/KGU-FIMS/Backend/internal"
 )
 
 // handleListAlerts : GET /api/alerts

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 	"github.com/gin-gonic/gin"
-	"github.com/KGU-FIMS/Backend/internal"
 )
 
 // handleQueryEvents : GET /api/events
