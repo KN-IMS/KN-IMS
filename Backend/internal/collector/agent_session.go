@@ -221,7 +221,6 @@ func (s *AgentSession) handleScanResult(payload []byte) {
 		Timestamp: int64(sr.Timestamp),
 	}
 
-	// scanType 판단 -> changed > 0이면 integrity, 아니면 baseline
 	scanType := "baseline"
 	if sr.Changed > 0 {
 		scanType = "integrity"

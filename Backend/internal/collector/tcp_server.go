@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/KGU-FIMS/Backend/internal"
 )
 
-// Server : TCP 리스너 + 세션 관리 + CommandSender 구현체
+// Server : TCP 리스너 + 세션 관리
 type Server struct {
 	addr     string
 	tlsCfg   *tls.Config
@@ -22,8 +21,7 @@ type Server struct {
 	alerts   internal.AlertStore
 	pub      internal.EventPublisher
 	onEvent  func(ctx context.Context, agentID string, e internal.FileEvent)
-	sessions sync.Map      // agentID(string) -> *tls.Conn
-	seqNum   atomic.Uint32 // 서버 -> 에이전트 seq_num
+	sessions sync.Map // agentID(string) -> *tls.Conn
 }
 
 // NewServer : TCP 서버 생성
@@ -91,74 +89,4 @@ func (s *Server) handleConn(conn *tls.Conn) {
 	}
 
 	session.Run()
-}
-
-// nextSeq : 서버 -> 에이전트 전송 시 seq_num 증가
-func (s *Server) nextSeq() uint32 {
-	return s.seqNum.Add(1)
-}
-
-// SendCreateBaseline : POST /api/agents/:id/baseline -> 0x05 CREATE_BASELINE
-func (s *Server) SendCreateBaseline(ctx context.Context, agentID, path string) error {
-	cmd := &CommandMsg{
-		Type: CmdCreateBaseline,
-		Path: path,
-	}
-	return s.sendCommand(ctx, agentID, cmd)
-}
-
-// SendIntegrityScan : POST /api/agents/:id/scan -> 0x05 INTEGRITY_SCAN
-func (s *Server) SendIntegrityScan(ctx context.Context, agentID, path string) error {
-	cmd := &CommandMsg{
-		Type: CmdIntegrityScan,
-		Path: path,
-	}
-	return s.sendCommand(ctx, agentID, cmd)
-}
-
-// SendAddWatch : watch 경로 추가 -> 0x05 ADD_WATCH
-func (s *Server) SendAddWatch(ctx context.Context, agentID, path string, recursive bool) error {
-	cmd := &CommandMsg{
-		Type:      CmdAddWatch,
-		Path:      path,
-		Recursive: recursive,
-	}
-	return s.sendCommand(ctx, agentID, cmd)
-}
-
-// SendRemoveWatch : watch 경로 제거 -> 0x05 REMOVE_WATCH
-func (s *Server) SendRemoveWatch(ctx context.Context, agentID, path string) error {
-	cmd := &CommandMsg{
-		Type: CmdRemoveWatch,
-		Path: path,
-	}
-	return s.sendCommand(ctx, agentID, cmd)
-}
-
-// SendConfigUpdate : 설정 업데이트 -> 0x05 CONFIG_UPDATE
-func (s *Server) SendConfigUpdate(ctx context.Context, agentID string, args string) error {
-	cmd := &CommandMsg{
-		Type: CmdConfigUpdate,
-	}
-	cmd.Args = parseConfigArgs(args)
-	return s.sendCommand(ctx, agentID, cmd)
-}
-
-// sendCommand : 공통 COMMAND 전송 -> 바이너리 직렬화
-func (s *Server) sendCommand(ctx context.Context, agentID string, cmd *CommandMsg) error {
-	val, ok := s.sessions.Load(agentID)
-	if !ok {
-		return fmt.Errorf("%w: %s", internal.ErrAgentOffline, agentID)
-	}
-	conn := val.(*tls.Conn)
-
-	payload := EncodeCommand(cmd)
-	return WriteFrame(conn, MsgCommand, s.nextSeq(), payload)
-}
-
-// parseConfigArgs : 문자열 -> CommandArgs 변환
-func parseConfigArgs(args string) CommandArgs {
-	var ca CommandArgs
-	_ = args
-	return ca
 }
