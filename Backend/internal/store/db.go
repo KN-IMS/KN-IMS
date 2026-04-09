@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joho/godotenv"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
 
 // DB : MySQL 커넥션 풀 래퍼

@@ -20,7 +20,7 @@ type RegisterPayload struct {
 	Hostname    string
 	IP          string
 	OS          string
-	MonitorType string // inotify, fanotify, ebpf, both, all
+	MonitorType string // inotify, ebpf
 }
 
 // FileEventPayload : 에이전트 -> 서버 파일 변경 이벤트
@@ -31,7 +31,7 @@ type FileEventPayload struct {
 	FileName       string
 	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
-	DetectedBy     string // inotify, fanotify, ebpf
+	DetectedBy     string // inotify, ebpf
 	Pid            int
 	Timestamp      int64
 }
@@ -66,7 +66,7 @@ type Agent struct {
 	IP           string
 	Version      string
 	OS           string
-	MonitorType  string // inotify, fanotify, ebpf, both, all
+	MonitorType  string // inotify, ebpf
 	Status       string // online, offline
 	RegisteredAt time.Time
 	LastSeen     time.Time
@@ -102,8 +102,8 @@ type FileEvent struct {
 	FileName       string
 	FileHash       string // SHA-256 hex
 	FilePermission string // "0644"
-	DetectedBy     string // inotify, fanotify, ebpf
-	Pid            int    // fanotify만 유효, 나머지 0
+	DetectedBy     string // inotify, ebpf
+	Pid            int    // PID를 제공하지 않는 이벤트는 0
 	OccurredAt     time.Time
 	ReceivedAt     time.Time
 }

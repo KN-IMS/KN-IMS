@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 )
 
 // AgentSession : 연결된 에이전트 1개의 생명주기 관리 -> goroutine으로 병렬 처리

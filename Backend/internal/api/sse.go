@@ -6,7 +6,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 	"github.com/gin-gonic/gin"
 )
 

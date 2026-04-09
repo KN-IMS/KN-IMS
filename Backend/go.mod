@@ -1,4 +1,4 @@
-module github.com/KGU-FIMS/Backend
+module github.com/KN-IMS/KN-IMS/Backend
 
 go 1.25.5
 

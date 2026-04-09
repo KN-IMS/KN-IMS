@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 	"github.com/gin-gonic/gin"
-	"github.com/KGU-FIMS/Backend/internal"
 )
 
 // handleListAgents : GET /api/agents

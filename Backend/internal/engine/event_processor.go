@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 )
 
 // EventProcessor : FILE_EVENT 수신 후 이상 감지 -> AlertStore 호출
