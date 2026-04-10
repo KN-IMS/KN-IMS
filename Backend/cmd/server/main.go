@@ -3,25 +3,25 @@ package main
 import (
 	"log"
 
-	"github.com/KGU-FIMS/Backend/internal/api"
-	"github.com/KGU-FIMS/Backend/internal/store"
+	"github.com/KN-IMS/KN-IMS/Backend/internal/api"
+	"github.com/KN-IMS/KN-IMS/Backend/internal/store"
 )
 
 func main() {
-	db, err := store.NewDB()
+	db, err := store.NewDBWithMigration("internal/store/schema.sql")
 	if err != nil {
-		log.Fatalf("DB 연결 실패: %v", err)
+		log.Fatalf("DB 초기화 실패: %v", err)
 	}
 	defer db.Close()
-	log.Println("MySQL 연결 성공!")
+	log.Println("MySQL 연결 및 마이그레이션 성공!")
 
 	agentStore := store.NewMySQLAgentStore(db.Conn)
-	eventStore := store.NewMySQLEventStore(db.Conn)
-	scanStore := store.NewMySQLScanStore(db.Conn)
+	fileStore := store.NewMySQLFileStore(db.Conn)
 	alertStore := store.NewMySQLAlertStore(db.Conn)
+	userStore := store.NewMySQLUserStore(db.Conn)
 
 	publisher := api.NewSSEPublisher()
 
-	server := api.NewServer(agentStore, eventStore, scanStore, alertStore, publisher, nil)
+	server := api.NewServer(agentStore, fileStore, alertStore, userStore, publisher, nil)
 	server.Start(":8080")
 }
