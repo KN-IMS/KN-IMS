@@ -1,81 +1,60 @@
--- fim-server DB 스키마
--- MySQL 8.0+
+CREATE DATABASE IF NOT EXISTS fims
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_bin;
 
--- ── 에이전트 ────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS agents (
-    agent_id      VARCHAR(36)  PRIMARY KEY,
+USE fims;
+
+CREATE TABLE IF NOT EXISTS user (
+    user_id    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    username   VARCHAR(50)     NOT NULL UNIQUE,
+    password   VARCHAR(255)    NOT NULL,
+    created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (user_id),
+    UNIQUE INDEX idx_user_username (username)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS agent (
+    agent_id      CHAR(36)     NOT NULL,
     hostname      VARCHAR(255) NOT NULL,
     ip            VARCHAR(45)  NOT NULL,
-    version       VARCHAR(20)  NOT NULL,
     os            VARCHAR(100) NOT NULL,
-    monitor_type  VARCHAR(20)  NOT NULL DEFAULT 'inotify',
-    status        VARCHAR(10)  NOT NULL DEFAULT 'online',
+    version       VARCHAR(50)  NOT NULL,
+    status        TINYINT(1)   NOT NULL DEFAULT 1,
     registered_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_seen     DATETIME     DEFAULT NULL
-);
+    last_seen_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
--- ── 파일 이벤트 ──────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS file_events (
-    id              BIGINT       AUTO_INCREMENT PRIMARY KEY,
-    agent_id        VARCHAR(36)  NOT NULL,
-    event_type      VARCHAR(10)  NOT NULL,
-    file_path       TEXT         NOT NULL,
-    file_name       VARCHAR(255) NOT NULL,
-    file_hash       VARCHAR(64)  NOT NULL DEFAULT '',
-    file_permission VARCHAR(10)  NOT NULL DEFAULT '',
-    detected_by     VARCHAR(20)  NOT NULL DEFAULT 'inotify',
-    pid             INT          NOT NULL DEFAULT 0,
-    occurred_at     DATETIME     NOT NULL,
-    received_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
-);
+    PRIMARY KEY (agent_id),
+    INDEX idx_agent_status (status)
+) ENGINE=InnoDB;
 
-CREATE INDEX idx_file_events_agent_id ON file_events(agent_id);
-CREATE INDEX idx_file_events_occurred_at ON file_events(occurred_at DESC);
-CREATE INDEX idx_file_events_event_type ON file_events(event_type);
+CREATE TABLE IF NOT EXISTS file (
+    agent_id        CHAR(36)      NOT NULL,
+    file_path_hash  CHAR(64)      NOT NULL,
+    file_path       VARCHAR(4096) NOT NULL,
+    file_hash       CHAR(64)      NOT NULL,
+    file_permission VARCHAR(4)    NOT NULL,
+    mod_time        DATETIME      NOT NULL,
+    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                  ON UPDATE CURRENT_TIMESTAMP,
 
--- ── 스캔 결과 요약 ───────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS scan_results (
-    id          BIGINT       AUTO_INCREMENT PRIMARY KEY,
-    agent_id    VARCHAR(36)  NOT NULL,
-    scan_type   VARCHAR(20)  NOT NULL,
-    scan_path   TEXT         NOT NULL,
-    total       INT          NOT NULL DEFAULT 0,
-    changed     INT          NOT NULL DEFAULT 0,
-    scanned_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
-);
+    PRIMARY KEY (agent_id, file_path_hash),
+    CONSTRAINT fk_file_agent
+        FOREIGN KEY (agent_id) REFERENCES agent(agent_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
 
-CREATE INDEX idx_scan_results_agent_id ON scan_results(agent_id);
+CREATE TABLE IF NOT EXISTS alert (
+    alert_id    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    agent_id    CHAR(36)        NOT NULL,
+    file_path   VARCHAR(4096)   NOT NULL,
+    event_type  ENUM('CREATE', 'MODIFY', 'DELETE') NOT NULL,
+    detected_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
--- ── 스캔 결과 개별 파일 항목 ─────────────────────────────────────
-CREATE TABLE IF NOT EXISTS scan_entries (
-    id              BIGINT       AUTO_INCREMENT PRIMARY KEY,
-    scan_id         BIGINT       NOT NULL,
-    file_path       TEXT         NOT NULL,
-    file_name       VARCHAR(255) NOT NULL,
-    file_hash       VARCHAR(64)  NOT NULL DEFAULT '',
-    file_permission VARCHAR(10)  NOT NULL DEFAULT '',
-    size            BIGINT       NOT NULL DEFAULT 0,
-    mod_time        DATETIME     DEFAULT NULL,
-    changed         BOOLEAN      NOT NULL DEFAULT FALSE,
-    FOREIGN KEY (scan_id) REFERENCES scan_results(id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_scan_entries_scan_id ON scan_entries(scan_id);
-CREATE INDEX idx_scan_entries_changed ON scan_entries(changed);
-
--- ── 알림 ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS alerts (
-    id          BIGINT       AUTO_INCREMENT PRIMARY KEY,
-    agent_id    VARCHAR(36)  NOT NULL,
-    severity    VARCHAR(10)  NOT NULL,
-    message     TEXT         NOT NULL,
-    resolved    BOOLEAN      NOT NULL DEFAULT FALSE,
-    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_alerts_agent_id ON alerts(agent_id);
-CREATE INDEX idx_alerts_resolved ON alerts(resolved);
-CREATE INDEX idx_alerts_severity ON alerts(severity);
+    PRIMARY KEY (alert_id),
+    INDEX idx_alert_agent (agent_id),
+    INDEX idx_alert_time  (detected_at),
+    CONSTRAINT fk_alert_agent
+        FOREIGN KEY (agent_id) REFERENCES agent(agent_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB;
