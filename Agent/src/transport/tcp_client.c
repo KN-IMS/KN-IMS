@@ -69,13 +69,19 @@ static double apply_jitter(double base)
     return base * (1.0 + jitter);
 }
 
-static int fim_tcp_register_internal(fim_tcp_client_t *cli,
-                                     const char *hostname,
-                                     const char *ip_str,
-                                     uint8_t monitor_type,
-                                     const char *os,
-                                     char *agent_id_out,
-                                     size_t id_size)
+static int fim_tcp_send_frame_locked(fim_tcp_client_t *cli, uint8_t type,
+                                     const uint8_t *payload, uint32_t payload_len);
+
+static int fim_tcp_recv_frame_locked(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
+                                     uint8_t **payload);
+
+static int fim_tcp_register_internal_locked(fim_tcp_client_t *cli,
+                                            const char *hostname,
+                                            const char *ip_str,
+                                            uint8_t monitor_type,
+                                            const char *os,
+                                            char *agent_id_out,
+                                            size_t id_size)
 {
     if (!cli || cli->state != FIM_CONN_CONNECTED) return -1;
 
@@ -100,14 +106,14 @@ static int fim_tcp_register_internal(fim_tcp_client_t *cli,
         return -1;
     }
 
-    if (fim_tcp_send_frame(cli, FIM_MSG_REGISTER, buf, (uint32_t)len) < 0) {
+    if (fim_tcp_send_frame_locked(cli, FIM_MSG_REGISTER, buf, (uint32_t)len) < 0) {
         syslog(LOG_ERR, "fim-tcp: REGISTER 전송 실패");
         return -1;
     }
 
     fim_frame_header_t hdr;
     uint8_t *payload = NULL;
-    int plen = fim_tcp_recv_frame(cli, &hdr, &payload);
+    int plen = fim_tcp_recv_frame_locked(cli, &hdr, &payload);
     if (plen < 8 || hdr.type != FIM_MSG_REGISTER || !payload) {
         syslog(LOG_ERR, "fim-tcp: REGISTER ACK 수신 실패 (plen=%d)", plen);
         free(payload);
@@ -157,18 +163,20 @@ int fim_tcp_init(fim_tcp_client_t *cli, fim_tls_ctx_t *tls,
     cli->host[sizeof(cli->host) - 1] = '\0';
 
     pthread_mutex_init(&cli->seq_lock, NULL);
-    pthread_mutex_init(&cli->write_lock, NULL);
+    pthread_mutex_init(&cli->conn_lock, NULL);
 
     srand((unsigned)time(NULL));
     return 0;
 }
 
-int fim_tcp_connect(fim_tcp_client_t *cli)
+static int fim_tcp_connect_locked(fim_tcp_client_t *cli)
 {
     if (!cli || !cli->tls) return -1;
 
     struct addrinfo hints;
     struct addrinfo *res = NULL;
+    int fd = -1;
+    SSL *ssl = NULL;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -182,61 +190,94 @@ int fim_tcp_connect(fim_tcp_client_t *cli)
         return -1;
     }
 
-    cli->fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (cli->fd < 0) {
+    fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (fd < 0) {
         syslog(LOG_ERR, "fim-tcp: 소켓 생성 실패: %s", strerror(errno));
         freeaddrinfo(res);
         return -1;
     }
 
-    if (connect(cli->fd, res->ai_addr, res->ai_addrlen) < 0) {
+    if (connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
         syslog(LOG_ERR, "fim-tcp: 연결 실패: %s:%u (%s)",
                cli->host, cli->port, strerror(errno));
-        close(cli->fd);
-        cli->fd = -1;
+        close(fd);
         freeaddrinfo(res);
         return -1;
     }
     freeaddrinfo(res);
 
-    if (set_keepalive(cli->fd) < 0)
+    if (set_keepalive(fd) < 0)
         syslog(LOG_WARNING, "fim-tcp: keepalive 설정 실패");
 
-    cli->ssl = fim_tls_wrap(cli->tls, cli->fd);
-    if (!cli->ssl) {
-        close(cli->fd);
-        cli->fd = -1;
+    ssl = fim_tls_wrap(cli->tls, fd);
+    if (!ssl) {
+        close(fd);
         return -1;
     }
 
+    cli->fd = fd;
+    cli->ssl = ssl;
     cli->state = FIM_CONN_CONNECTED;
+    pthread_mutex_lock(&cli->seq_lock);
     cli->seq_num = 0;
+    pthread_mutex_unlock(&cli->seq_lock);
     cli->send_failures = 0;
+
     syslog(LOG_INFO, "fim-tcp: 서버 연결 성공 %s:%u", cli->host, cli->port);
     return 0;
+}
+
+int fim_tcp_connect(fim_tcp_client_t *cli)
+{
+    int ret;
+    if (!cli) return -1;
+
+    pthread_mutex_lock(&cli->conn_lock);
+    ret = fim_tcp_connect_locked(cli);
+    pthread_mutex_unlock(&cli->conn_lock);
+    return ret;
+}
+
+static void fim_tcp_disconnect_locked(fim_tcp_client_t *cli)
+{
+    if (!cli) return;
+
+    SSL *ssl = NULL;
+    int fd = -1;
+
+    ssl = cli->ssl;
+    fd = cli->fd;
+    cli->ssl = NULL;
+    cli->fd = -1;
+    cli->state = FIM_CONN_DISCONNECTED;
+    cli->send_failures = 0;
+    pthread_mutex_lock(&cli->seq_lock);
+    cli->seq_num = 0;
+    pthread_mutex_unlock(&cli->seq_lock);
+
+    if (ssl) {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+    }
+    if (fd >= 0)
+        close(fd);
 }
 
 void fim_tcp_disconnect(fim_tcp_client_t *cli)
 {
     if (!cli) return;
 
-    if (cli->ssl) {
-        SSL_shutdown(cli->ssl);
-        SSL_free(cli->ssl);
-        cli->ssl = NULL;
-    }
-    if (cli->fd >= 0) {
-        close(cli->fd);
-        cli->fd = -1;
-    }
-    cli->state = FIM_CONN_DISCONNECTED;
+    pthread_mutex_lock(&cli->conn_lock);
+    fim_tcp_disconnect_locked(cli);
+    pthread_mutex_unlock(&cli->conn_lock);
 }
 
 int fim_tcp_reconnect(fim_tcp_client_t *cli)
 {
     if (!cli) return -1;
 
-    fim_tcp_disconnect(cli);
+    pthread_mutex_lock(&cli->conn_lock);
+    fim_tcp_disconnect_locked(cli);
 
     double delay = FIM_RECONNECT_INIT_SEC;
     for (int i = 0; i < FIM_RECONNECT_MAX_RETRIES; i++) {
@@ -250,21 +291,22 @@ int fim_tcp_reconnect(fim_tcp_client_t *cli)
         ts.tv_nsec = (long)((wait - ts.tv_sec) * 1e9);
         nanosleep(&ts, NULL);
 
-        if (fim_tcp_connect(cli) == 0) {
+        if (fim_tcp_connect_locked(cli) == 0) {
             if (!cli->reg_cached ||
-                fim_tcp_register_internal(cli,
-                                          cli->reg_hostname,
-                                          cli->reg_ip,
-                                          cli->reg_monitor_type,
-                                          cli->reg_os,
-                                          NULL,
-                                          0) == 0) {
+                fim_tcp_register_internal_locked(cli,
+                                                cli->reg_hostname,
+                                                cli->reg_ip,
+                                                cli->reg_monitor_type,
+                                                cli->reg_os,
+                                                NULL,
+                                                0) == 0) {
                 syslog(LOG_INFO, "fim-tcp: 재연결 성공 (시도 %d)", i + 1);
+                pthread_mutex_unlock(&cli->conn_lock);
                 return 0;
             }
 
             syslog(LOG_WARNING, "fim-tcp: 재연결 후 재등록 실패");
-            fim_tcp_disconnect(cli);
+            fim_tcp_disconnect_locked(cli);
         }
 
         delay *= FIM_RECONNECT_MULTIPLIER;
@@ -274,60 +316,90 @@ int fim_tcp_reconnect(fim_tcp_client_t *cli)
 
     syslog(LOG_ERR, "fim-tcp: 재연결 실패 — 최대 시도 횟수 초과 (%d회)",
            FIM_RECONNECT_MAX_RETRIES);
+    pthread_mutex_unlock(&cli->conn_lock);
     return -1;
 }
 
-int fim_tcp_send_frame(fim_tcp_client_t *cli, uint8_t type,
-                       const uint8_t *payload, uint32_t payload_len)
+static int fim_tcp_send_frame_locked(fim_tcp_client_t *cli, uint8_t type,
+                                     const uint8_t *payload, uint32_t payload_len)
 {
-    if (!cli || cli->state != FIM_CONN_CONNECTED) return -1;
+    if (!cli) return -1;
     if (payload_len > FIM_MAX_FRAME_SIZE) return -1;
 
     fim_frame_header_t hdr;
     hdr.length = payload_len;
     hdr.type = type;
-    hdr.seq_num = next_seq(cli);
-
+    int ret = -1;
+    int failures = 0;
+    int reconnect_needed = 0;
     uint8_t hdr_buf[FIM_FRAME_HEADER_SIZE];
+
+    if (cli->state != FIM_CONN_CONNECTED || !cli->ssl) {
+        return -1;
+    }
+
+    hdr.seq_num = next_seq(cli);
     fim_frame_header_encode(&hdr, hdr_buf);
 
-    pthread_mutex_lock(&cli->write_lock);
-
-    int ret = ssl_write_all(cli->ssl, hdr_buf, FIM_FRAME_HEADER_SIZE);
+    ret = ssl_write_all(cli->ssl, hdr_buf, FIM_FRAME_HEADER_SIZE);
     if (ret == 0 && payload_len > 0)
         ret = ssl_write_all(cli->ssl, payload, payload_len);
 
-    pthread_mutex_unlock(&cli->write_lock);
-
     if (ret < 0) {
         cli->send_failures++;
-        syslog(LOG_ERR, "fim-tcp: 프레임 전송 실패 (type=0x%02x, 연속 %d회)",
-               type, cli->send_failures);
+        failures = cli->send_failures;
 
         if (cli->send_failures >= FIM_SEND_MAX_RETRIES) {
+            cli->send_failures = 0;
+            reconnect_needed = 1;
+        }
+    } else {
+        cli->send_failures = 0;
+    }
+
+    if (ret < 0) {
+        syslog(LOG_ERR, "fim-tcp: 프레임 전송 실패 (type=0x%02x, 연속 %d회)",
+               type, failures);
+        if (reconnect_needed) {
             syslog(LOG_WARNING, "fim-tcp: 전송 %d회 실패 — 재연결 시작",
                    FIM_SEND_MAX_RETRIES);
-            cli->send_failures = 0;
             return -2;
         }
         return -1;
     }
 
-    cli->send_failures = 0;
     return 0;
 }
 
-int fim_tcp_recv_frame(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
-                       uint8_t **payload)
+int fim_tcp_send_frame(fim_tcp_client_t *cli, uint8_t type,
+                       const uint8_t *payload, uint32_t payload_len)
 {
-    if (!cli || !hdr || !payload || cli->state != FIM_CONN_CONNECTED)
+    int ret;
+    if (!cli)
+        return -1;
+
+    pthread_mutex_lock(&cli->conn_lock);
+    ret = fim_tcp_send_frame_locked(cli, type, payload, payload_len);
+    pthread_mutex_unlock(&cli->conn_lock);
+    return ret;
+}
+
+static int fim_tcp_recv_frame_locked(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
+                                     uint8_t **payload)
+{
+    if (!cli || !hdr || !payload)
         return -1;
 
     *payload = NULL;
 
-    uint8_t hdr_buf[FIM_FRAME_HEADER_SIZE];
-    if (ssl_read_all(cli->ssl, hdr_buf, FIM_FRAME_HEADER_SIZE) < 0)
+    if (cli->state != FIM_CONN_CONNECTED || !cli->ssl)
         return -1;
+
+    uint8_t hdr_buf[FIM_FRAME_HEADER_SIZE];
+
+    if (ssl_read_all(cli->ssl, hdr_buf, FIM_FRAME_HEADER_SIZE) < 0) {
+        return -1;
+    }
 
     fim_frame_header_decode(hdr_buf, hdr);
 
@@ -339,7 +411,8 @@ int fim_tcp_recv_frame(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
 
     if (hdr->length > 0) {
         *payload = malloc(hdr->length);
-        if (!*payload) return -1;
+        if (!*payload)
+            return -1;
 
         if (ssl_read_all(cli->ssl, *payload, hdr->length) < 0) {
             free(*payload);
@@ -351,12 +424,25 @@ int fim_tcp_recv_frame(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
     return (int)hdr->length;
 }
 
+int fim_tcp_recv_frame(fim_tcp_client_t *cli, fim_frame_header_t *hdr,
+                       uint8_t **payload)
+{
+    int ret;
+    if (!cli || !hdr || !payload)
+        return -1;
+
+    pthread_mutex_lock(&cli->conn_lock);
+    ret = fim_tcp_recv_frame_locked(cli, hdr, payload);
+    pthread_mutex_unlock(&cli->conn_lock);
+    return ret;
+}
+
 void fim_tcp_free(fim_tcp_client_t *cli)
 {
     if (!cli) return;
     fim_tcp_disconnect(cli);
     pthread_mutex_destroy(&cli->seq_lock);
-    pthread_mutex_destroy(&cli->write_lock);
+    pthread_mutex_destroy(&cli->conn_lock);
 }
 
 static uint8_t map_event_type(fim_event_type_t t)
@@ -391,8 +477,14 @@ int fim_tcp_register(fim_tcp_client_t *cli,
                      char *agent_id_out,
                      size_t id_size)
 {
-    return fim_tcp_register_internal(cli, hostname, ip_str, monitor_type, os,
-                                     agent_id_out, id_size);
+    int ret;
+    if (!cli) return -1;
+
+    pthread_mutex_lock(&cli->conn_lock);
+    ret = fim_tcp_register_internal_locked(cli, hostname, ip_str, monitor_type,
+                                           os, agent_id_out, id_size);
+    pthread_mutex_unlock(&cli->conn_lock);
+    return ret;
 }
 
 int fim_tcp_send_event(fim_tcp_client_t *cli, const fim_event_t *ev)

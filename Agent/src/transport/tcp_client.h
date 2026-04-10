@@ -36,7 +36,7 @@ typedef struct {
 
     uint32_t         seq_num;
     pthread_mutex_t  seq_lock;
-    pthread_mutex_t  write_lock;
+    pthread_mutex_t  conn_lock;
 
     uint64_t         agent_id;
     int              send_failures;
