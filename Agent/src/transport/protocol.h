@@ -14,7 +14,7 @@
  */
 
 #define FIM_FRAME_HEADER_SIZE 9
-#define FIM_MAX_FRAME_SIZE    65536
+#define FIM_MAX_FRAME_SIZE    65535
 
 typedef enum {
     FIM_MSG_REGISTER   = 0x01,
