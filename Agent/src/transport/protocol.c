@@ -80,19 +80,31 @@ static inline uint64_t read_u64(const uint8_t **p)
     return ((uint64_t)ntohl(hi) << 32) | ntohl(lo);
 }
 
-static inline char *read_str(const uint8_t **p, uint16_t *out_len)
+static inline int read_str(const uint8_t **p, const uint8_t *end, char **out, uint16_t *out_len)
 {
+    *out = NULL;
+    *out_len = 0;
+
+    if ((size_t)(end - *p) < 2)
+        return -1;
+
     uint16_t len = read_u16(p);
     *out_len = len;
-    if (len == 0) return NULL;
+    if (len == 0)
+        return 0;
+
+    if ((size_t)(end - *p) < len)
+        return -1;
 
     char *s = malloc(len + 1);
-    if (!s) return NULL;
+    if (!s)
+        return -1;
 
     memcpy(s, *p, len);
     s[len] = '\0';
     *p += len;
-    return s;
+    *out = s;
+    return 0;
 }
 
 static inline void read_bytes(const uint8_t **p, uint8_t *dst, size_t len)
@@ -136,13 +148,21 @@ int fim_register_decode(const uint8_t *buf, size_t len, fim_msg_register_t *msg)
 {
     const uint8_t *p = buf;
     const uint8_t *end = buf + len;
+    memset(msg, 0, sizeof(*msg));
 
-    msg->hostname = read_str(&p, &msg->hostname_len);
-    if (p + 5 > end) return -1;
+    if (read_str(&p, end, &msg->hostname, &msg->hostname_len) < 0)
+        return -1;
+    if ((size_t)(end - p) < 5) {
+        fim_register_free(msg);
+        return -1;
+    }
 
     msg->ip = read_u32(&p);
     msg->monitor_type = read_u8(&p);
-    msg->os = read_str(&p, &msg->os_len);
+    if (read_str(&p, end, &msg->os, &msg->os_len) < 0) {
+        fim_register_free(msg);
+        return -1;
+    }
     return (int)(p - buf);
 }
 
@@ -202,13 +222,23 @@ int fim_file_event_decode(const uint8_t *buf, size_t len, fim_msg_file_event_t *
 
     const uint8_t *p = buf;
     const uint8_t *end = buf + len;
+    memset(msg, 0, sizeof(*msg));
 
     msg->agent_id = read_u64(&p);
     msg->event_type = read_u8(&p);
-    msg->file_path = read_str(&p, &msg->file_path_len);
-    msg->file_name = read_str(&p, &msg->file_name_len);
+    if (read_str(&p, end, &msg->file_path, &msg->file_path_len) < 0) {
+        fim_file_event_free(msg);
+        return -1;
+    }
+    if (read_str(&p, end, &msg->file_name, &msg->file_name_len) < 0) {
+        fim_file_event_free(msg);
+        return -1;
+    }
 
-    if (p + 11 > end) return -1;
+    if ((size_t)(end - p) < 11) {
+        fim_file_event_free(msg);
+        return -1;
+    }
     msg->file_permission = read_u16(&p);
     msg->detected_by = read_u8(&p);
     msg->pid = read_u32(&p);
