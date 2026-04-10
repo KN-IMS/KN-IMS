@@ -4,26 +4,26 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 )
 
-// Server : REST API 서버
+// Server : HTTP API 서버 구조체
 type Server struct {
 	router        *gin.Engine
 	agentStore    internal.AgentStore
-	eventStore    internal.EventStore
-	scanStore     internal.ScanStore
+	fileStore     internal.FileStore
 	alertStore    internal.AlertStore
+	userStore     internal.UserStore
 	publisher     internal.EventPublisher
 	commandSender internal.CommandSender
 }
 
-// NewServer : 서버 생성
+// NewServer : Server 생성자
 func NewServer(
 	agentStore internal.AgentStore,
-	eventStore internal.EventStore,
-	scanStore internal.ScanStore,
+	fileStore internal.FileStore,
 	alertStore internal.AlertStore,
+	userStore internal.UserStore,
 	publisher internal.EventPublisher,
 	commandSender internal.CommandSender,
 ) *Server {
@@ -32,9 +32,9 @@ func NewServer(
 	s := &Server{
 		router:        router,
 		agentStore:    agentStore,
-		eventStore:    eventStore,
-		scanStore:     scanStore,
+		fileStore:     fileStore,
 		alertStore:    alertStore,
+		userStore:     userStore,
 		publisher:     publisher,
 		commandSender: commandSender,
 	}
@@ -44,30 +44,40 @@ func NewServer(
 	return s
 }
 
-// registerRoutes : API 엔드포인트 등록
+// registerRoutes : 모든 API 엔드포인트를 라우터에 등록
 func (s *Server) registerRoutes() {
 	api := s.router.Group("/api")
 
-	// Agent API
-	api.GET("/agents", s.handleListAgents)
-	api.GET("/agents/:id", s.handleGetAgent)
-	api.DELETE("/agents/:id", s.handleDeleteAgent)
-	api.PUT("/agents/:id/status", s.handleUpdateStatus)
+	// 인증 불필요 (로그인/회원가입)
+	auth := api.Group("/auth")
+	auth.POST("/register", s.handleRegister)
+	auth.POST("/login", s.handleLogin)
 
-	// Event API
-	api.GET("/events", s.handleQueryEvents)
-	api.GET("/events/stream", s.handleSSE)
+	// 인증 필요 (JWT 미들웨어 적용)
+	protected := api.Group("")
+	protected.Use(authMiddleware())
+
+	// Agent API
+	protected.GET("/agents", s.handleListAgents)
+	protected.GET("/agents/:id", s.handleGetAgent)
+	protected.DELETE("/agents/:id", s.handleDeleteAgent)
+	protected.PUT("/agents/:id/status", s.handleUpdateStatus)
 
 	// Command API
-	api.POST("/agents/:id/baseline", s.handleCreateBaseline)
-	api.POST("/agents/:id/scan", s.handleIntegrityScan)
+	protected.POST("/agents/:id/baseline", s.handleCreateBaseline)
+	protected.POST("/agents/:id/scan", s.handleIntegrityScan)
 
 	// Alert API
-	api.GET("/alerts", s.handleListAlerts)
-	api.PATCH("/alerts/:id/resolve", s.handleResolveAlert)
+	protected.GET("/alerts", s.handleListAlerts)
+
+	// SSE
+	protected.GET("/events/stream", s.handleSSE)
 }
 
-// Start : 서버 시작
+
+// Start : HTTP 서버 시작
+// addr: 바인딩 주소 (e.g. ":8080")
+// main.go에서 호출
 func (s *Server) Start(addr string) {
 	log.Printf("HTTP 서버 시작: %s", addr)
 	if err := s.router.Run(addr); err != nil {

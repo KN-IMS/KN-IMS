@@ -3,25 +3,36 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IMS/KN-IMS/Backend/internal"
 )
 
 // handleListAlerts : GET /api/alerts
+// 무결성 이벤트(알림) 목록을 필터링하여 조회
 func (s *Server) handleListAlerts(c *gin.Context) {
 	filter := internal.AlertFilter{
-		AgentID:  c.Query("agent_id"),
-		Severity: c.Query("severity"),
+		AgentID:   c.Query("agent_id"),
+		EventType: c.Query("event_type"),
 	}
 
-	if resolved := c.Query("resolved"); resolved != "" {
-		b, err := strconv.ParseBool(resolved)
+	if from := c.Query("from"); from != "" {
+		t, err := time.Parse(time.RFC3339, from)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid resolved value"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from format, use RFC3339"})
 			return
 		}
-		filter.Resolved = &b
+		filter.From = t
+	}
+
+	if to := c.Query("to"); to != "" {
+		t, err := time.Parse(time.RFC3339, to)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to format, use RFC3339"})
+			return
+		}
+		filter.To = t
 	}
 
 	if limit := c.Query("limit"); limit != "" {
@@ -48,25 +59,4 @@ func (s *Server) handleListAlerts(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, alerts)
-}
-
-// handleResolveAlert : PATCH /api/alerts/:id/resolve
-func (s *Server) handleResolveAlert(c *gin.Context) {
-	idStr := c.Param("id")
-	alertID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid alert id"})
-		return
-	}
-
-	err = s.alertStore.ResolveAlert(c.Request.Context(), alertID)
-	if err == internal.ErrAlertNotFound {
-		c.JSON(http.StatusNotFound, gin.H{"error": "alert not found"})
-		return
-	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "alert resolved"})
 }
