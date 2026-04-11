@@ -22,7 +22,7 @@
  * 우선순위:
  *   eBPF 가능 → eBPF
  *   eBPF 불가 + /dev/im_lkm 존재 → LKM
- *   둘 다 불가 → inotify fallback
+ *   둘 다 불가 → 시작 중단
  *
  * 환경변수 (transport 설정):
  *   IM_SERVER_HOST   서버 IP/호스트 (기본: 127.0.0.1)
@@ -34,7 +34,7 @@
  * 시그널:
  *   SIGTERM/SIGINT  → 정상 종료
  *   SIGHUP          → 설정 재로드
- *   SIGUSR1         → /tmp/im_scan_request 파일에서 경로 읽어 watch 추가/제거
+ *   SIGUSR1         → 예약됨 (현재 런타임 watch 변경 미사용)
  */
 
 #include <stdarg.h>
@@ -71,7 +71,7 @@ static volatile sig_atomic_t g_running   = 1;
 static volatile sig_atomic_t g_reload    = 0;
 static volatile sig_atomic_t g_scan_req  = 0;  /* SIGUSR1 온디맨드 watch 변경 */
 
-/* 에이전트 로컬 베이스라인 DB — inotify MODIFY 이벤트 시 자동 무결성 검사 */
+/* 에이전트 로컬 베이스라인 DB — MODIFY 이벤트 시 자동 무결성 검사 */
 static im_baseline_db_t g_baseline_db;
 
 /* 백엔드를 전역으로 — handle_scan_request(), reload_config()에서 접근 필요 */
@@ -162,13 +162,6 @@ static void close_logging(void) {
     if (g_use_syslog) closelog();
 }
 
-/* ── 백엔드 스레드 함수 ───────────────────────── */
-typedef struct {
-    im_backend_t     *backend;
-    im_config_t      *cfg;
-    im_event_queue_t *queue;
-} thread_arg_t;
-
 /* ── LKM 이벤트 수신 스레드 ──────────────────── */
 static void *lkm_event_thread(void *arg)
 {
@@ -203,17 +196,6 @@ static void *lkm_event_thread(void *arg)
         im_queue_push(queue, &ev);
     }
     LOG_INFO_FIM("[lkm] 이벤트 수신 스레드 종료");
-    return NULL;
-}
-
-static void *backend_thread(void *arg) {
-    thread_arg_t  *ta = (thread_arg_t *)arg;
-    im_backend_t *be = ta->backend;
-    LOG_INFO_FIM("[%s] thread start (tid=%ld)", be->name, (long)pthread_self());
-    while (g_running) {
-        be->poll_events(be);
-    }
-    LOG_INFO_FIM("[%s] thread stopped", be->name);
     return NULL;
 }
 
@@ -686,6 +668,11 @@ int main(int argc, char *argv[]) {
     pthread_t ebpf_thread = 0;
 #endif
     pthread_t lkm_thread  = 0;
+    pthread_t hb_thread   = 0;
+    int tls_inited        = 0;
+    int transport_inited  = 0;
+    im_heartbeat_arg_t hb_arg = {0};
+
 #ifdef HAVE_LIBBPF
     if (cfg->ebpf_enabled && kver >= KERNEL_VER(5, 8)) {
         LOG_INFO_FIM("eBPF inode policy backend activate (kernel %d.%d)",
@@ -697,12 +684,17 @@ int main(int argc, char *argv[]) {
             pthread_create(&ebpf_thread, NULL, ebpf_poll_thread, NULL);
         }
     } else {
-#else
-    {
-#endif
         LOG_INFO_FIM("eBPF Disabled (kernel %d.%d, required: 5.8+)",
                      kver_major, kver_minor);
+    }
+#else
+    {
+        LOG_INFO_FIM("eBPF Disabled (kernel %d.%d, required: 5.8+)",
+                     kver_major, kver_minor);
+    }
+#endif
 
+    if (!g_ebpf_active) {
         /* LKM 가용 여부 확인 — /dev/im_lkm 존재 시 활성화 */
         if (access(IM_LKM_DEV_PATH, F_OK) == 0) {
             if (lkm_client_init() == 0) {
@@ -712,12 +704,17 @@ int main(int argc, char *argv[]) {
             } else {
                 LOG_WARN_FIM("[lkm] %s 열기 실패 — LKM 비활성", IM_LKM_DEV_PATH);
             }
+        } else {
+            LOG_INFO_FIM("[lkm] %s 없음 — LKM 비활성", IM_LKM_DEV_PATH);
         }
     }
 
+    if (!g_ebpf_active && !g_lkm_active) {
+        LOG_ERROR_FIM("eBPF/LKM 모두 비활성 — inotify fallback은 사용하지 않음. eBPF 또는 LKM 환경을 먼저 설정하세요.");
+        goto done;
+    }
+
     /* ── transport 초기화 (비필수) ─────────────── */
-    int tls_inited = 0;
-    int transport_inited = 0;
     uint8_t transport_monitor_type = 0;
     const char *server_host = getenv("IM_SERVER_HOST");
     if (!server_host) server_host = "127.0.0.1";
@@ -786,8 +783,6 @@ int main(int argc, char *argv[]) {
     }
 
     /* ── heartbeat 스레드 ─────────────────────── */
-    pthread_t hb_thread = 0;
-    im_heartbeat_arg_t hb_arg = {0};
     if (g_transport_ok) {
         hb_arg.cli = &g_tcp_client;
         hb_arg.interval_sec = IM_HEARTBEAT_DEFAULT_SEC;
@@ -841,43 +836,12 @@ int main(int argc, char *argv[]) {
     }
 #endif /* HAVE_LIBBPF */
 
-    /* ── inotify fallback 시작 ─────────────────────
-     * eBPF, LKM 둘 다 사용할 수 없을 때만 inotify를 폴백으로 사용한다. */
-    pthread_t    ino_thread = 0;
-    thread_arg_t ino_arg    = {0};
-
     if (g_ebpf_active) {
-        LOG_INFO_FIM("inotify 비활성화 — eBPF 전용 모드 (kernel %d.%d)",
-                     kver_major, kver_minor);
-    } else if (g_lkm_active) {
-        LOG_INFO_FIM("inotify 비활성화 — LKM 전용 모드 (kernel %d.%d)",
+        LOG_INFO_FIM("inotify fallback 비활성화 — eBPF 전용 모드 (kernel %d.%d)",
                      kver_major, kver_minor);
     } else {
-        g_be_inotify = im_inotify_create();
-        if (!g_be_inotify || g_be_inotify->init(g_be_inotify, cfg, queue) < 0) {
-            LOG_ERROR_FIM("inotify initailize failed — exit");
-            if (g_be_inotify) { free(g_be_inotify); g_be_inotify = NULL; }
-            im_queue_destroy(queue);
-            free(queue);
-            goto done;
-        }
-
-        for (int i = 0; i < cfg->watch_count; i++)
-            g_be_inotify->add_watch(g_be_inotify,
-                                    cfg->watches[i].path,
-                                    cfg->watches[i].recursive);
-
-        ino_arg = (thread_arg_t){g_be_inotify, cfg, queue};
-        if (pthread_create(&ino_thread, NULL, backend_thread, &ino_arg) != 0) {
-            LOG_ERROR_FIM("inotify thread create failed");
-            g_be_inotify->cleanup(g_be_inotify);
-            free(g_be_inotify); g_be_inotify = NULL;
-            im_queue_destroy(queue);
-            free(queue);
-            goto done;
-        }
-        LOG_INFO_FIM("inotify thread started successfully (%d-path monitoring)",
-                     cfg->watch_count);
+        LOG_INFO_FIM("inotify fallback 비활성화 — LKM 전용 모드 (kernel %d.%d)",
+                     kver_major, kver_minor);
     }
 
     daemon_notify_ready();
@@ -914,7 +878,6 @@ int main(int argc, char *argv[]) {
 
     if (hb_arg.running) hb_arg.running = 0;
     if (hb_thread)    { pthread_join(hb_thread,    NULL); LOG_INFO_FIM("heartbeat 스레드 합류"); }
-    if (ino_thread)   { pthread_join(ino_thread,   NULL); LOG_INFO_FIM("inotify 스레드 합류"); }
     /* eBPF: stop → join → cleanup 순서를 지켜야 use-after-free 없음 */
 #ifdef HAVE_LIBBPF
     if (g_ebpf_active) ebpf_policy_stop();
