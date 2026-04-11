@@ -35,8 +35,9 @@ const (
 // 모니터 Type
 
 const (
-	MonLkm  uint8 = 0x02
-	MonEbpf uint8 = 0x03
+	MonLkm      uint8 = 0x02
+	MonEbpf     uint8 = 0x03
+	MonFanotify uint8 = 0x04
 )
 
 // agent 상태
@@ -400,6 +401,8 @@ func MonitorTypeName(t uint8) string {
 		return "lkm"
 	case MonEbpf:
 		return "ebpf"
+	case MonFanotify:
+		return "fanotify"
 	default:
 		return fmt.Sprintf("unknown(0x%02x)", t)
 	}

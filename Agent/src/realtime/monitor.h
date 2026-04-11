@@ -43,9 +43,10 @@ typedef enum {
 
 /* ── 이벤트 소스 ───────────────────────────────── */
 typedef enum {
-    IM_SOURCE_INOTIFY = 0,  /* inotify 상시 감시 */
-    IM_SOURCE_EBPF    = 1,  /* eBPF LSM 훅 (kernel 5.8+) */
-    IM_SOURCE_LKM     = 2,  /* 커널 모듈 kprobe (kernel < 5.8) */
+    IM_SOURCE_INOTIFY  = 0, /* inotify 상시 감시 */
+    IM_SOURCE_EBPF     = 1, /* eBPF LSM 훅 (kernel 5.8+) */
+    IM_SOURCE_LKM      = 2, /* 커널 모듈 kprobe (kernel < 5.8) */
+    IM_SOURCE_FANOTIFY = 3, /* fanotify mount/filesystem 감시 */
 } im_event_source_t;
 
 /* ── 이벤트 구조체 ─────────────────────────────── */
@@ -137,9 +138,10 @@ static inline const char *im_event_type_str(im_event_type_t t) {
 
 static inline const char *im_source_str(im_event_source_t s) {
     switch (s) {
-        case IM_SOURCE_INOTIFY: return "inotify";
-        case IM_SOURCE_EBPF:    return "ebpf";
-        case IM_SOURCE_LKM:     return "lkm";
+        case IM_SOURCE_INOTIFY:  return "inotify";
+        case IM_SOURCE_EBPF:     return "ebpf";
+        case IM_SOURCE_LKM:      return "lkm";
+        case IM_SOURCE_FANOTIFY: return "fanotify";
         default:                 return "unknown";
     }
 }

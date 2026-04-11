@@ -15,6 +15,7 @@
  * OpenSSL 1.1.x+ (Ubuntu 18.04+, CentOS 8+):
  *   - TLS_client_method()          → 그대로 사용
  *   - SSL_CTX_set_min_proto_version → 사용 가능
+ *   - 최소 TLS 1.2, TLS 1.3은 협상으로 선택
  */
 
 int tls_context_init(im_tls_ctx_t *out,
@@ -34,12 +35,13 @@ int tls_context_init(im_tls_ctx_t *out,
         return -1;
     }
 
-#if OPENSSL_VERSION_NUMBER >= 0x10101000L
-    /* OpenSSL 1.1.1+: TLS 1.3 사용 */
-    SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
-#elif OPENSSL_VERSION_NUMBER >= 0x10100000L
-    /* OpenSSL 1.1.0: TLS 1.2 최소 */
-    SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+    /* OpenSSL 1.1.0+: TLS 1.2 이상 허용, TLS 1.3은 협상으로 선택 */
+    if (SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION) != 1) {
+        syslog(LOG_ERR, "tls: 최소 TLS 버전 설정 실패");
+        SSL_CTX_free(ctx);
+        return -1;
+    }
 #else
     /* OpenSSL 1.0.x: SSL_OP_NO_* 로 구버전 비활성화 */
     SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |

@@ -31,8 +31,9 @@ typedef enum {
 } im_evt_type_t;
 
 typedef enum {
-    IM_MON_LKM  = 0x02,
-    IM_MON_EBPF = 0x03
+    IM_MON_LKM      = 0x02,
+    IM_MON_EBPF     = 0x03,
+    IM_MON_FANOTIFY = 0x04
 } im_mon_type_t;
 
 typedef enum {

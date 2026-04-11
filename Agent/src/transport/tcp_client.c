@@ -464,6 +464,8 @@ static uint8_t map_source(im_event_source_t s)
         return IM_MON_EBPF;
     case IM_SOURCE_LKM:
         return IM_MON_LKM;
+    case IM_SOURCE_FANOTIFY:
+        return IM_MON_FANOTIFY;
     default:
         return 0;
     }
