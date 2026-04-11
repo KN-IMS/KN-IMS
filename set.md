@@ -1,11 +1,14 @@
 # KN-IMS Setup
 
+모든 명령은 `KN-IMS` 저장소 루트를 기준으로 작성한다.
+로컬 절대 경로는 사용하지 않는다.
+
 ## 3. backend 스크립트로 처음부터 세팅
 
 backend 머신에서 실행:
 
 ```bash
-cd /Users/juhwan/Desktop/kyonggi/3_1/capstone/KN-IMS
+cd KN-IMS
 ./setup_backend_agent_runtime.sh -m backend -v user@192.168.64.11
 ```
 
@@ -24,7 +27,7 @@ cd /Users/juhwan/Desktop/kyonggi/3_1/capstone/KN-IMS
 backend 머신에서 새 터미널:
 
 ```bash
-cd /Users/juhwan/Desktop/kyonggi/3_1/capstone/KN-IMS/Backend
+cd KN-IMS/Backend
 go run ./cmd/server
 ```
 
@@ -39,7 +42,7 @@ VM에서:
 
 ```bash
 ssh user@192.168.64.11
-cd /home/user/KN-IMS
+cd KN-IMS
 sudo ./setup_backend_agent_runtime.sh -m agent -c 192.168.64.1
 ```
 
@@ -55,7 +58,7 @@ sudo ./setup_backend_agent_runtime.sh -m agent -c 192.168.64.1
 VM에서:
 
 ```bash
-cd /home/user/KN-IMS/Agent
+cd KN-IMS/Agent
 sudo ./scripts/setup_ebpf_deps.sh
 cmake -S . -B build
 cmake --build build
@@ -66,7 +69,7 @@ cmake --build build
 VM에서:
 
 ```bash
-cd /home/user/KN-IMS/Agent
+cd KN-IMS/Agent
 sudo ./scripts/install_agent_service.sh
 ```
 
