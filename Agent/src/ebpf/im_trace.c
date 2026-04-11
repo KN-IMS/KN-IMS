@@ -20,8 +20,8 @@ static inline uint64_t stat_dev_to_kernel(uint64_t st_dev)
 #include <bpf/libbpf.h>
 
 #include "realtime/monitor.h"
-#include "fim_trace_api.h"
-#include "fim_trace.skel.h"
+#include "im_trace_api.h"
+#include "im_trace.skel.h"
 
 struct inode_key {
     __u64 dev;
@@ -46,7 +46,7 @@ struct audit_event {
 };
 
 static volatile sig_atomic_t g_running = 1;
-static struct fim_trace_bpf *g_skel = NULL;
+static struct im_trace_bpf *g_skel = NULL;
 static struct ring_buffer   *g_rb   = NULL;
 
 /* ── 유저랜드 역방향 경로 캐시 {dev, ino} → path ──
@@ -62,7 +62,7 @@ static struct ring_buffer   *g_rb   = NULL;
 struct path_cache_entry {
     __u64 dev;
     __u64 ino;
-    char  path[FIM_MAX_PATH];
+    char  path[IM_MAX_PATH];
     int   used;  /* SLOT_EMPTY / SLOT_USED / SLOT_DELETED */
 };
 
@@ -90,8 +90,8 @@ static void path_cache_put(__u64 dev, __u64 ino, const char *path)
             t->dev  = dev;
             t->ino  = ino;
             t->used = SLOT_USED;
-            strncpy(t->path, path, FIM_MAX_PATH - 1);
-            t->path[FIM_MAX_PATH - 1] = '\0';
+            strncpy(t->path, path, IM_MAX_PATH - 1);
+            t->path[IM_MAX_PATH - 1] = '\0';
             break;
         }
         if (e->used == SLOT_DELETED) {
@@ -100,8 +100,8 @@ static void path_cache_put(__u64 dev, __u64 ino, const char *path)
         }
         /* SLOT_USED: 동일 키면 덮어쓰기 (경로 갱신) */
         if (e->dev == dev && e->ino == ino) {
-            strncpy(e->path, path, FIM_MAX_PATH - 1);
-            e->path[FIM_MAX_PATH - 1] = '\0';
+            strncpy(e->path, path, IM_MAX_PATH - 1);
+            e->path[IM_MAX_PATH - 1] = '\0';
             break;
         }
     }
@@ -206,10 +206,10 @@ static int hook_dedup_check(__u64 dev, __u64 ino, __u32 op_mask, __u64 ts_ns)
 static const char *op_mask_to_str(__u32 mask)
 {
     switch (mask) {
-        case FIM_EBPF_OP_READ:   return "READ";
-        case FIM_EBPF_OP_WRITE:  return "WRITE";
-        case FIM_EBPF_OP_DELETE: return "DELETE";
-        case FIM_EBPF_OP_ATTR:   return "ATTR";
+        case IM_EBPF_OP_READ:   return "READ";
+        case IM_EBPF_OP_WRITE:  return "WRITE";
+        case IM_EBPF_OP_DELETE: return "DELETE";
+        case IM_EBPF_OP_ATTR:   return "ATTR";
         default:                 return "MULTI";
     }
 }
@@ -293,7 +293,7 @@ static int remove_path_internal(const char *path, int recursive)
             break;
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
             continue;
-        char child[FIM_MAX_PATH];
+        char child[IM_MAX_PATH];
         snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
         remove_path_internal(child, 1);
     }
@@ -339,7 +339,7 @@ static int add_path_internal(const char *path, __u32 mask, __u32 block, int recu
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
             continue;
 
-        char child[FIM_MAX_PATH];
+        char child[IM_MAX_PATH];
         snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
         add_path_internal(child, mask, block, 1);
     }
@@ -348,19 +348,19 @@ static int add_path_internal(const char *path, __u32 mask, __u32 block, int recu
     return 0;
 }
 
-static fim_event_type_t op_to_fim_type(__u32 op_mask)
+static im_event_type_t op_to_im_type(__u32 op_mask)
 {
-    if (op_mask & FIM_EBPF_OP_DELETE) return FIM_EVENT_DELETE;
-    if (op_mask & FIM_EBPF_OP_WRITE)  return FIM_EVENT_MODIFY;
-    if (op_mask & FIM_EBPF_OP_ATTR)   return FIM_EVENT_ATTRIB;
-    return FIM_EVENT_ACCESS;
+    if (op_mask & IM_EBPF_OP_DELETE) return IM_EVENT_DELETE;
+    if (op_mask & IM_EBPF_OP_WRITE)  return IM_EVENT_MODIFY;
+    if (op_mask & IM_EBPF_OP_ATTR)   return IM_EVENT_ATTRIB;
+    return IM_EVENT_ACCESS;
 }
 
 static int handle_audit_event(void *ctx, void *data, size_t data_sz)
 {
-    fim_event_queue_t       *queue = ctx;
+    im_event_queue_t       *queue = ctx;
     const struct audit_event *e    = data;
-    char path[FIM_MAX_PATH];
+    char path[IM_MAX_PATH];
 
     if (data_sz < sizeof(*e))
         return 0;
@@ -383,67 +383,67 @@ static int handle_audit_event(void *ctx, void *data, size_t data_sz)
 
     /* 파일 삭제 이벤트: inode 해제 → policy_map + path_cache 즉시 제거
      * (제거하지 않으면 OS의 inode 재사용 시 다른 파일이 삭제된 파일로 오인됨) */
-    if (e->hook_id == FIM_HOOK_PATH_UNLINK && !(e->denied)) {
+    if (e->hook_id == IM_HOOK_PATH_UNLINK && !(e->denied)) {
         remove_policy_inode(e->dev, e->ino);
         path_cache_remove(e->dev, e->ino);
     }
 
-    /* 큐가 있으면 fim_event_t로 변환해서 push → 무결성 검사 + transport 전송 */
+    /* 큐가 있으면 im_event_t로 변환해서 push → 무결성 검사 + transport 전송 */
     if (queue) {
-        fim_event_t ev;
+        im_event_t ev;
         memset(&ev, 0, sizeof(ev));
-        ev.type      = op_to_fim_type(e->op_mask);
-        ev.source    = FIM_SOURCE_EBPF;
+        ev.type      = op_to_im_type(e->op_mask);
+        ev.source    = IM_SOURCE_EBPF;
         ev.timestamp = (time_t)(e->ts_ns / 1000000000ULL);
         ev.pid       = (pid_t)e->pid;
         ev.uid       = (uid_t)e->uid;
-        strncpy(ev.path, path, FIM_MAX_PATH - 1);
+        strncpy(ev.path, path, IM_MAX_PATH - 1);
         strncpy(ev.comm, e->comm, sizeof(ev.comm) - 1);
 
         /* filename: path의 마지막 '/' 이후 */
         const char *slash = strrchr(path, '/');
         strncpy(ev.filename, slash ? slash + 1 : path, sizeof(ev.filename) - 1);
 
-        fim_queue_push(queue, &ev);
+        im_queue_push(queue, &ev);
     }
 
     return 0;
 }
 
-int ebpf_policy_init(fim_event_queue_t *queue)
+int ebpf_policy_init(im_event_queue_t *queue)
 {
     int err;
 
-    g_skel = fim_trace_bpf__open();
+    g_skel = im_trace_bpf__open();
     if (!g_skel) {
         fprintf(stderr, "eBPF open failed\n");
         return -1;
     }
 
-    err = fim_trace_bpf__load(g_skel);
+    err = im_trace_bpf__load(g_skel);
     if (err) {
         fprintf(stderr, "eBPF load failed: %d\n", err);
-        fim_trace_bpf__destroy(g_skel);
+        im_trace_bpf__destroy(g_skel);
         g_skel = NULL;
         return -1;
     }
 
-    err = fim_trace_bpf__attach(g_skel);
+    err = im_trace_bpf__attach(g_skel);
     if (err) {
         fprintf(stderr, "eBPF attach failed: %d\n", err);
-        fim_trace_bpf__destroy(g_skel);
+        im_trace_bpf__destroy(g_skel);
         g_skel = NULL;
         return -1;
     }
 
-    /* queue를 ctx로 전달 → handle_audit_event에서 fim_queue_push 사용 */
+    /* queue를 ctx로 전달 → handle_audit_event에서 im_queue_push 사용 */
     g_rb = ring_buffer__new(bpf_map__fd(g_skel->maps.audit_rb),
                             handle_audit_event,
                             queue,
                             NULL);
     if (!g_rb) {
         fprintf(stderr, "Ring buffer create failed\n");
-        fim_trace_bpf__destroy(g_skel);
+        im_trace_bpf__destroy(g_skel);
         g_skel = NULL;
         return -1;
     }
@@ -483,7 +483,7 @@ void ebpf_policy_cleanup(void)
     }
 
     if (g_skel) {
-        fim_trace_bpf__destroy(g_skel);
+        im_trace_bpf__destroy(g_skel);
         g_skel = NULL;
     }
 }

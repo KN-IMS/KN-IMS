@@ -1,5 +1,5 @@
 /*
- * lkm_client.c — fim_monitor ↔ fim_lkm.ko impl
+ * lkm_client.c — im_monitor ↔ im_lkm.ko impl
  *
  * - Extract st_dev/st_ino using stat() and inject policy into LKM using ioctl
  * - dev_t encoding conversion: glibc (major<<8)|minor → kernel (major<<20)|minor
@@ -27,7 +27,7 @@ static uint64_t stat_dev_to_kernel(dev_t st_dev)
 
 int lkm_client_init(void)
 {
-    g_lkm_fd = open(FIM_LKM_DEV_PATH, O_RDWR);
+    g_lkm_fd = open(IM_LKM_DEV_PATH, O_RDWR);
     if (g_lkm_fd < 0)
         return -errno;
     return 0;
@@ -50,33 +50,33 @@ int lkm_add_inode(dev_t st_dev, ino_t st_ino,
                   uint32_t mask, uint32_t block,
                   const char *path)
 {
-    struct fim_lkm_policy_req req = {0};
+    struct im_lkm_policy_req req = {0};
     req.dev   = stat_dev_to_kernel(st_dev);
     req.ino   = (uint64_t)st_ino;
     req.mask  = mask;
     req.block = block;
     if (path)
         strncpy(req.path, path, sizeof(req.path) - 1);
-    return ioctl(g_lkm_fd, FIM_IOC_ADD_INODE, &req);
+    return ioctl(g_lkm_fd, IM_IOC_ADD_INODE, &req);
 }
 
 int lkm_remove_inode(dev_t st_dev, ino_t st_ino)
 {
-    struct fim_lkm_policy_req req = {0};
+    struct im_lkm_policy_req req = {0};
     req.dev = stat_dev_to_kernel(st_dev);
     req.ino = (uint64_t)st_ino;
-    return ioctl(g_lkm_fd, FIM_IOC_REMOVE_INODE, &req);
+    return ioctl(g_lkm_fd, IM_IOC_REMOVE_INODE, &req);
 }
 
 int lkm_clear_all(void)
 {
-    return ioctl(g_lkm_fd, FIM_IOC_CLEAR_ALL, 0);
+    return ioctl(g_lkm_fd, IM_IOC_CLEAR_ALL, 0);
 }
 
-int lkm_add_from_baseline(fim_baseline_db_t *db, uint32_t block)
+int lkm_add_from_baseline(im_baseline_db_t *db, uint32_t block)
 {
     int added = 0;
-    uint32_t mask = FIM_OP_WRITE | FIM_OP_DELETE | FIM_OP_RENAME;
+    uint32_t mask = IM_OP_WRITE | IM_OP_DELETE | IM_OP_RENAME;
 
     pthread_rwlock_rdlock(&db->lock);
 
@@ -97,7 +97,7 @@ int lkm_add_from_baseline(fim_baseline_db_t *db, uint32_t block)
 
 /* ── event polling ────────────────────────────────────────── */
 
-int lkm_read_event(struct fim_lkm_event *ev)
+int lkm_read_event(struct im_lkm_event *ev)
 {
     ssize_t n = read(g_lkm_fd, ev, sizeof(*ev));
     if (n < 0)                    return -errno;
@@ -105,7 +105,7 @@ int lkm_read_event(struct fim_lkm_event *ev)
     return 0;
 }
 
-int lkm_read_event_timeout(struct fim_lkm_event *ev, int timeout_ms)
+int lkm_read_event_timeout(struct im_lkm_event *ev, int timeout_ms)
 {
     fd_set rfds;
     struct timeval tv;

@@ -1,33 +1,33 @@
-#ifndef FIM_TRACE_API_H
-#define FIM_TRACE_API_H
+#ifndef IM_TRACE_API_H
+#define IM_TRACE_API_H
 
 #include <stdint.h>
 #include "realtime/monitor.h"
 
 enum {
-    FIM_EBPF_OP_READ   = 0x01,
-    FIM_EBPF_OP_WRITE  = 0x02,
-    FIM_EBPF_OP_DELETE = 0x04,
-    FIM_EBPF_OP_ATTR   = 0x08,
+    IM_EBPF_OP_READ   = 0x01,
+    IM_EBPF_OP_WRITE  = 0x02,
+    IM_EBPF_OP_DELETE = 0x04,
+    IM_EBPF_OP_ATTR   = 0x08,
 };
 
 /* block=0: AUDIT only (maintenance mode)
  * block=1: DENY   (lock mode) */
-#define FIM_EBPF_BLOCK_AUDIT 0u
-#define FIM_EBPF_BLOCK_DENY  1u
+#define IM_EBPF_BLOCK_AUDIT 0u
+#define IM_EBPF_BLOCK_DENY  1u
 
-/* LSM 훅 ID — fim_trace.bpf.c의 FIM_HOOK_* 값과 반드시 일치해야 함 */
-enum fim_hook_id {
-    FIM_HOOK_FILE_PERMISSION = 1,
-    FIM_HOOK_FILE_OPEN       = 2,
-    FIM_HOOK_PATH_UNLINK     = 3,
-    FIM_HOOK_PATH_RENAME     = 4,
-    FIM_HOOK_PATH_TRUNCATE   = 5,
-    FIM_HOOK_PATH_CHMOD      = 6,
-    FIM_HOOK_INODE_SETATTR   = 7,
+/* LSM 훅 ID — im_trace.bpf.c의 IM_HOOK_* 값과 반드시 일치해야 함 */
+enum im_hook_id {
+    IM_HOOK_FILE_PERMISSION = 1,
+    IM_HOOK_FILE_OPEN       = 2,
+    IM_HOOK_PATH_UNLINK     = 3,
+    IM_HOOK_PATH_RENAME     = 4,
+    IM_HOOK_PATH_TRUNCATE   = 5,
+    IM_HOOK_PATH_CHMOD      = 6,
+    IM_HOOK_INODE_SETATTR   = 7,
 };
 
-int   ebpf_policy_init(fim_event_queue_t *queue);
+int   ebpf_policy_init(im_event_queue_t *queue);
 void  ebpf_policy_stop(void);       /* poll thread 종료 신호 (join 전 호출) */
 void  ebpf_policy_cleanup(void);    /* 리소스 해제 (join 후 호출) */
 void *ebpf_poll_thread(void *arg);

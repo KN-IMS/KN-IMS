@@ -1,20 +1,20 @@
-#ifndef FIM_TLS_CONTEXT_H
-#define FIM_TLS_CONTEXT_H
+#ifndef IM_TLS_CONTEXT_H
+#define IM_TLS_CONTEXT_H
 
 #include <openssl/ssl.h>
 
 typedef struct {
     SSL_CTX *ctx;
-} fim_tls_ctx_t;
+} im_tls_ctx_t;
 
 /* CA 인증서 + 클라이언트 인증서 + 개인키로 mTLS SSL_CTX 초기화 */
-int  tls_context_init(fim_tls_ctx_t *out,
+int  tls_context_init(im_tls_ctx_t *out,
                       const char *ca_crt,
                       const char *agent_crt,
                       const char *agent_key);
 
-SSL *fim_tls_wrap(fim_tls_ctx_t *ctx, int fd);
+SSL *im_tls_wrap(im_tls_ctx_t *ctx, int fd);
 
-void tls_context_free(fim_tls_ctx_t *ctx);
+void tls_context_free(im_tls_ctx_t *ctx);
 
-#endif /* FIM_TLS_CONTEXT_H */
+#endif /* IM_TLS_CONTEXT_H */

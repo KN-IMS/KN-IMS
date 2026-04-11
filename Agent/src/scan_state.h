@@ -1,5 +1,5 @@
-#ifndef FIM_SCAN_STATE_H
-#define FIM_SCAN_STATE_H
+#ifndef IM_SCAN_STATE_H
+#define IM_SCAN_STATE_H
 
 #include <pthread.h>
 
@@ -14,4 +14,4 @@ extern volatile int         g_integrity_requested;
 extern char                 g_integrity_scan_id[64];
 extern pthread_mutex_t      g_integrity_lock;
 
-#endif /* FIM_SCAN_STATE_H */
+#endif /* IM_SCAN_STATE_H */

@@ -1,5 +1,5 @@
-#ifndef FIM_DAEMON_H
-#define FIM_DAEMON_H
+#ifndef IM_DAEMON_H
+#define IM_DAEMON_H
 
 /* 데몬화 수행
  * foreground=1 이면 데몬화 건너뜀 (개발·디버그·CI 환경용)
@@ -26,4 +26,4 @@ void daemon_cleanup(void);
 void daemon_notify_ready(void);
 void daemon_watchdog_ping(void);
 
-#endif /* FIM_DAEMON_H */
+#endif /* IM_DAEMON_H */

@@ -23,8 +23,8 @@
 #include <asm/unistd.h>
 #include <asm/ptrace.h>
 
-#include "../fim_lkm_policy.h"
-#include "../fim_lkm_events.h"
+#include "../im_lkm_policy.h"
+#include "../im_lkm_events.h"
 
 /* ── sys_call_table ──────────────────────────────────────── */
 
@@ -55,11 +55,11 @@ static sys_call_ptr_t orig_sys_setxattr;
 static sys_call_ptr_t orig_sys_lsetxattr;
 static sys_call_ptr_t orig_sys_fsetxattr;
 
-static unsigned long fim_force_order;
+static unsigned long im_force_order;
 
 static inline void mywrite_cr0(unsigned long val)
 {
-    asm volatile("mov %0,%%cr0" : "+r"(val), "+m"(fim_force_order));
+    asm volatile("mov %0,%%cr0" : "+r"(val), "+m"(im_force_order));
 }
 
 static void disable_write_protection(void)
@@ -128,7 +128,7 @@ static int fd_to_devino(unsigned int fd, uint64_t *dev, uint64_t *ino)
     return 1;
 }
 
-static long fim_check(uint64_t dev, uint64_t ino, uint32_t op,
+static long im_check(uint64_t dev, uint64_t ino, uint32_t op,
                       const char *op_name)
 {
     uint32_t block_mode;
@@ -136,32 +136,32 @@ static long fim_check(uint64_t dev, uint64_t ino, uint32_t op,
     if (!inode_policy_lookup(dev, ino, op, &block_mode))
         return 0;
 
-    if (block_mode == FIM_BLOCK_DENY) {
+    if (block_mode == IM_BLOCK_DENY) {
         pr_info("DENY %s: comm=%s dev=%llu ino=%llu\n",
                 op_name, current->comm, dev, ino);
-        fim_event_enqueue(dev, ino, op, 1);
+        im_event_enqueue(dev, ino, op, 1);
         return -EPERM;
     }
 
-    fim_event_enqueue(dev, ino, op, 0);
+    im_event_enqueue(dev, ino, op, 0);
     return 0;
 }
 
-static long fim_check_delete(uint64_t dev, uint64_t ino)
+static long im_check_delete(uint64_t dev, uint64_t ino)
 {
     uint32_t block_mode;
 
-    if (!inode_policy_lookup(dev, ino, FIM_OP_DELETE, &block_mode))
+    if (!inode_policy_lookup(dev, ino, IM_OP_DELETE, &block_mode))
         return 0;
 
-    if (block_mode == FIM_BLOCK_DENY) {
+    if (block_mode == IM_BLOCK_DENY) {
         pr_info("DENY delete: comm=%s dev=%llu ino=%llu\n",
                 current->comm, dev, ino);
-        fim_event_enqueue(dev, ino, FIM_OP_DELETE, 1);
+        im_event_enqueue(dev, ino, IM_OP_DELETE, 1);
         return -EPERM;
     }
 
-    fim_event_enqueue(dev, ino, FIM_OP_DELETE, 0);
+    im_event_enqueue(dev, ino, IM_OP_DELETE, 0);
     inode_policy_remove(dev, ino);
     return 0;
 }
@@ -174,17 +174,17 @@ static long check_rename(int olddfd, const char __user *oldname,
     long rc = 0;
 
     if (pathat_to_devino(olddfd, oldname, &dev, &ino)) {
-        rc = fim_check(dev, ino, FIM_OP_RENAME, "rename(src)");
+        rc = im_check(dev, ino, IM_OP_RENAME, "rename(src)");
         if (rc)
             return rc;
     }
 
     if (pathat_to_devino(newdfd, newname, &dev, &ino)) {
-        if (inode_policy_lookup(dev, ino, FIM_OP_RENAME, &block_mode)
-            && block_mode == FIM_BLOCK_DENY) {
+        if (inode_policy_lookup(dev, ino, IM_OP_RENAME, &block_mode)
+            && block_mode == IM_BLOCK_DENY) {
             pr_info("DENY rename(dst): comm=%s dev=%llu ino=%llu\n",
                     current->comm, dev, ino);
-            fim_event_enqueue(dev, ino, FIM_OP_RENAME, 1);
+            im_event_enqueue(dev, ino, IM_OP_RENAME, 1);
             return -EPERM;
         }
     }
@@ -202,43 +202,43 @@ static long check_open_flags(int dfd, const char __user *upath, int flags)
     if (!pathat_to_devino(dfd, upath, &dev, &ino))
         return 0;
 
-    return fim_check(dev, ino, FIM_OP_WRITE, "open");
+    return im_check(dev, ino, IM_OP_WRITE, "open");
 }
 
-static asmlinkage long fim_sys_write(const struct pt_regs *regs)
+static asmlinkage long im_sys_write(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (fd_to_devino((unsigned int)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "write");
+        rc = im_check(dev, ino, IM_OP_WRITE, "write");
 
     return rc ? rc : orig_sys_write(regs);
 }
 
-static asmlinkage long fim_sys_truncate(const struct pt_regs *regs)
+static asmlinkage long im_sys_truncate(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "truncate");
+        rc = im_check(dev, ino, IM_OP_WRITE, "truncate");
 
     return rc ? rc : orig_sys_truncate(regs);
 }
 
-static asmlinkage long fim_sys_ftruncate(const struct pt_regs *regs)
+static asmlinkage long im_sys_ftruncate(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (fd_to_devino((unsigned int)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "ftruncate");
+        rc = im_check(dev, ino, IM_OP_WRITE, "ftruncate");
 
     return rc ? rc : orig_sys_ftruncate(regs);
 }
 
-static asmlinkage long fim_sys_open(const struct pt_regs *regs)
+static asmlinkage long im_sys_open(const struct pt_regs *regs)
 {
     long rc = check_open_flags(AT_FDCWD,
                                (const char __user *)arg1(regs),
@@ -246,7 +246,7 @@ static asmlinkage long fim_sys_open(const struct pt_regs *regs)
     return rc ? rc : orig_sys_open(regs);
 }
 
-static asmlinkage long fim_sys_openat(const struct pt_regs *regs)
+static asmlinkage long im_sys_openat(const struct pt_regs *regs)
 {
     long rc = check_open_flags((int)arg1(regs),
                                (const char __user *)arg2(regs),
@@ -254,7 +254,7 @@ static asmlinkage long fim_sys_openat(const struct pt_regs *regs)
     return rc ? rc : orig_sys_openat(regs);
 }
 
-static asmlinkage long fim_sys_creat(const struct pt_regs *regs)
+static asmlinkage long im_sys_creat(const struct pt_regs *regs)
 {
     long rc = check_open_flags(AT_FDCWD,
                                (const char __user *)arg1(regs),
@@ -262,18 +262,18 @@ static asmlinkage long fim_sys_creat(const struct pt_regs *regs)
     return rc ? rc : orig_sys_creat(regs);
 }
 
-static asmlinkage long fim_sys_unlink(const struct pt_regs *regs)
+static asmlinkage long im_sys_unlink(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check_delete(dev, ino);
+        rc = im_check_delete(dev, ino);
 
     return rc ? rc : orig_sys_unlink(regs);
 }
 
-static asmlinkage long fim_sys_unlinkat(const struct pt_regs *regs)
+static asmlinkage long im_sys_unlinkat(const struct pt_regs *regs)
 {
     int dfd   = (int)arg1(regs);
     const char __user *path = (const char __user *)arg2(regs);
@@ -282,12 +282,12 @@ static asmlinkage long fim_sys_unlinkat(const struct pt_regs *regs)
     long rc = 0;
 
     if (!(flag & AT_REMOVEDIR) && pathat_to_devino(dfd, path, &dev, &ino))
-        rc = fim_check_delete(dev, ino);
+        rc = im_check_delete(dev, ino);
 
     return rc ? rc : orig_sys_unlinkat(regs);
 }
 
-static asmlinkage long fim_sys_rename(const struct pt_regs *regs)
+static asmlinkage long im_sys_rename(const struct pt_regs *regs)
 {
     long rc = check_rename(AT_FDCWD,
                            (const char __user *)arg1(regs),
@@ -296,7 +296,7 @@ static asmlinkage long fim_sys_rename(const struct pt_regs *regs)
     return rc ? rc : orig_sys_rename(regs);
 }
 
-static asmlinkage long fim_sys_renameat(const struct pt_regs *regs)
+static asmlinkage long im_sys_renameat(const struct pt_regs *regs)
 {
     long rc = check_rename((int)arg1(regs),
                            (const char __user *)arg2(regs),
@@ -306,7 +306,7 @@ static asmlinkage long fim_sys_renameat(const struct pt_regs *regs)
 }
 
 #ifdef __NR_renameat2
-static asmlinkage long fim_sys_renameat2(const struct pt_regs *regs)
+static asmlinkage long im_sys_renameat2(const struct pt_regs *regs)
 {
     long rc = check_rename((int)arg1(regs),
                            (const char __user *)arg2(regs),
@@ -316,116 +316,116 @@ static asmlinkage long fim_sys_renameat2(const struct pt_regs *regs)
 }
 #endif
 
-static asmlinkage long fim_sys_chmod(const struct pt_regs *regs)
+static asmlinkage long im_sys_chmod(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "chmod");
+        rc = im_check(dev, ino, IM_OP_WRITE, "chmod");
 
     return rc ? rc : orig_sys_chmod(regs);
 }
 
-static asmlinkage long fim_sys_fchmodat(const struct pt_regs *regs)
+static asmlinkage long im_sys_fchmodat(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (pathat_to_devino((int)arg1(regs),
                          (const char __user *)arg2(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "fchmodat");
+        rc = im_check(dev, ino, IM_OP_WRITE, "fchmodat");
 
     return rc ? rc : orig_sys_fchmodat(regs);
 }
 
-static asmlinkage long fim_sys_chown(const struct pt_regs *regs)
+static asmlinkage long im_sys_chown(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "chown");
+        rc = im_check(dev, ino, IM_OP_WRITE, "chown");
 
     return rc ? rc : orig_sys_chown(regs);
 }
 
-static asmlinkage long fim_sys_fchownat(const struct pt_regs *regs)
+static asmlinkage long im_sys_fchownat(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (pathat_to_devino((int)arg1(regs),
                          (const char __user *)arg2(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "fchownat");
+        rc = im_check(dev, ino, IM_OP_WRITE, "fchownat");
 
     return rc ? rc : orig_sys_fchownat(regs);
 }
 
-static asmlinkage long fim_sys_link(const struct pt_regs *regs)
+static asmlinkage long im_sys_link(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "link");
+        rc = im_check(dev, ino, IM_OP_WRITE, "link");
 
     return rc ? rc : orig_sys_link(regs);
 }
 
-static asmlinkage long fim_sys_linkat(const struct pt_regs *regs)
+static asmlinkage long im_sys_linkat(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (pathat_to_devino((int)arg1(regs),
                          (const char __user *)arg2(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "linkat");
+        rc = im_check(dev, ino, IM_OP_WRITE, "linkat");
 
     return rc ? rc : orig_sys_linkat(regs);
 }
 
-static asmlinkage long fim_sys_setxattr(const struct pt_regs *regs)
+static asmlinkage long im_sys_setxattr(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "setxattr");
+        rc = im_check(dev, ino, IM_OP_WRITE, "setxattr");
 
     return rc ? rc : orig_sys_setxattr(regs);
 }
 
-static asmlinkage long fim_sys_lsetxattr(const struct pt_regs *regs)
+static asmlinkage long im_sys_lsetxattr(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino((const char __user *)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "lsetxattr");
+        rc = im_check(dev, ino, IM_OP_WRITE, "lsetxattr");
 
     return rc ? rc : orig_sys_lsetxattr(regs);
 }
 
-static asmlinkage long fim_sys_fsetxattr(const struct pt_regs *regs)
+static asmlinkage long im_sys_fsetxattr(const struct pt_regs *regs)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (fd_to_devino((int)arg1(regs), &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "fsetxattr");
+        rc = im_check(dev, ino, IM_OP_WRITE, "fsetxattr");
 
     return rc ? rc : orig_sys_fsetxattr(regs);
 }
 
 #define HOOK(name) \
     orig_sys_##name = sys_call_table[__NR_##name]; \
-    sys_call_table[__NR_##name] = fim_sys_##name
+    sys_call_table[__NR_##name] = im_sys_##name
 
 #define UNHOOK(name) \
     sys_call_table[__NR_##name] = orig_sys_##name
 
-int fim_hooks_init(void)
+int im_hooks_init(void)
 {
     sys_call_table = (sys_call_ptr_t *)
         kallsyms_lookup_name("sys_call_table");
@@ -463,7 +463,7 @@ int fim_hooks_init(void)
     return 0;
 }
 
-void fim_hooks_exit(void)
+void im_hooks_exit(void)
 {
     if (!sys_call_table)
         return;

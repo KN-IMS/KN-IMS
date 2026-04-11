@@ -26,22 +26,22 @@ typedef struct {
     int  wd_count;
     struct {
         int  wd;
-        char path[FIM_MAX_PATH];
-    } wd_map[FIM_MAX_WATCHES];
-    fim_config_t *cfg;    /* 자체 보호 경로 접근용 */
+        char path[IM_MAX_PATH];
+    } wd_map[IM_MAX_WATCHES];
+    im_config_t *cfg;    /* 자체 보호 경로 접근용 */
 } inotify_priv_t;
 
 /* ── 유틸리티 ──────────────────────────────────── */
 
-static fim_event_type_t inotify_mask_to_fim(uint32_t mask) {
-    if (mask & IN_CREATE)      return FIM_EVENT_CREATE;
-    if (mask & IN_MODIFY)      return FIM_EVENT_MODIFY;
-    if (mask & IN_DELETE)       return FIM_EVENT_DELETE;
-    if (mask & IN_DELETE_SELF)  return FIM_EVENT_DELETE;
-    if (mask & IN_ATTRIB)       return FIM_EVENT_ATTRIB;
-    if (mask & (IN_MOVED_FROM | IN_MOVED_TO)) return FIM_EVENT_MOVE;
-    if (mask & IN_ACCESS)       return FIM_EVENT_ACCESS;
-    return FIM_EVENT_UNKNOWN;
+static im_event_type_t inotify_mask_to_fim(uint32_t mask) {
+    if (mask & IN_CREATE)      return IM_EVENT_CREATE;
+    if (mask & IN_MODIFY)      return IM_EVENT_MODIFY;
+    if (mask & IN_DELETE)       return IM_EVENT_DELETE;
+    if (mask & IN_DELETE_SELF)  return IM_EVENT_DELETE;
+    if (mask & IN_ATTRIB)       return IM_EVENT_ATTRIB;
+    if (mask & (IN_MOVED_FROM | IN_MOVED_TO)) return IM_EVENT_MOVE;
+    if (mask & IN_ACCESS)       return IM_EVENT_ACCESS;
+    return IM_EVENT_UNKNOWN;
 }
 
 static const char *wd_to_path(inotify_priv_t *priv, int wd) {
@@ -62,15 +62,15 @@ static int is_protected_path(inotify_priv_t *priv, const char *path) {
 }
 
 static int add_single_watch(inotify_priv_t *priv, const char *path) {
-    if (priv->wd_count >= FIM_MAX_WATCHES) {
+    if (priv->wd_count >= IM_MAX_WATCHES) {
         LOG_WARN_FIM("[inotify] Insufficient watch slots: %s", path);
         return -1;
     }
 
     /* trailing slash 정규화 — 경로 조합 시 이중 슬래시 방지 */
-    char npath[FIM_MAX_PATH];
-    strncpy(npath, path, FIM_MAX_PATH - 1);
-    npath[FIM_MAX_PATH - 1] = '\0';
+    char npath[IM_MAX_PATH];
+    strncpy(npath, path, IM_MAX_PATH - 1);
+    npath[IM_MAX_PATH - 1] = '\0';
     size_t plen = strlen(npath);
     while (plen > 1 && npath[plen - 1] == '/') npath[--plen] = '\0';
 
@@ -92,7 +92,7 @@ static int add_single_watch(inotify_priv_t *priv, const char *path) {
     }
 
     priv->wd_map[priv->wd_count].wd = wd;
-    strncpy(priv->wd_map[priv->wd_count].path, npath, FIM_MAX_PATH - 1);
+    strncpy(priv->wd_map[priv->wd_count].path, npath, IM_MAX_PATH - 1);
     priv->wd_count++;
 
     LOG_DEBUG_FIM("[inotify] watch add: %s (wd=%d, total=%d)",
@@ -112,7 +112,7 @@ static int add_recursive_watch(inotify_priv_t *priv, const char *base) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
 
-        char subpath[FIM_MAX_PATH];
+        char subpath[IM_MAX_PATH];
         snprintf(subpath, sizeof(subpath), "%s/%s", base, entry->d_name);
         add_recursive_watch(priv, subpath);
     }
@@ -122,8 +122,8 @@ static int add_recursive_watch(inotify_priv_t *priv, const char *base) {
 
 /* ── 백엔드 인터페이스 ─────────────────────────── */
 
-static int inotify_init_be(fim_backend_t *self, fim_config_t *cfg,
-                           fim_event_queue_t *queue) {
+static int inotify_init_be(im_backend_t *self, im_config_t *cfg,
+                           im_event_queue_t *queue) {
     inotify_priv_t *priv = calloc(1, sizeof(inotify_priv_t));
     if (!priv) return -1;
 
@@ -142,13 +142,13 @@ static int inotify_init_be(fim_backend_t *self, fim_config_t *cfg,
     return 0;
 }
 
-static int inotify_add_watch_be(fim_backend_t *self, const char *path, int recursive) {
+static int inotify_add_watch_be(im_backend_t *self, const char *path, int recursive) {
     inotify_priv_t *priv = (inotify_priv_t *)self->priv;
 
     /* trailing slash 정규화 */
-    char npath[FIM_MAX_PATH];
-    strncpy(npath, path, FIM_MAX_PATH - 1);
-    npath[FIM_MAX_PATH - 1] = '\0';
+    char npath[IM_MAX_PATH];
+    strncpy(npath, path, IM_MAX_PATH - 1);
+    npath[IM_MAX_PATH - 1] = '\0';
     size_t plen = strlen(npath);
     while (plen > 1 && npath[plen - 1] == '/') npath[--plen] = '\0';
 
@@ -157,7 +157,7 @@ static int inotify_add_watch_be(fim_backend_t *self, const char *path, int recur
     return add_single_watch(priv, npath);
 }
 
-static int inotify_remove_watch_be(fim_backend_t *self, const char *path) {
+static int inotify_remove_watch_be(im_backend_t *self, const char *path) {
     inotify_priv_t *priv = (inotify_priv_t *)self->priv;
 
     for (int i = 0; i < priv->wd_count; i++) {
@@ -176,9 +176,9 @@ static int inotify_remove_watch_be(fim_backend_t *self, const char *path) {
     return 0;
 }
 
-static int inotify_poll_events_be(fim_backend_t *self) {
+static int inotify_poll_events_be(im_backend_t *self) {
     inotify_priv_t *priv = (inotify_priv_t *)self->priv;
-    char buf[FIM_EVENT_BUF_SIZE];
+    char buf[IM_EVENT_BUF_SIZE];
 
     fd_set fds;
     FD_ZERO(&fds);
@@ -197,10 +197,10 @@ static int inotify_poll_events_be(fim_backend_t *self) {
         struct inotify_event *ev = (struct inotify_event *)ptr;
 
         if (ev->len > 0) {
-            fim_event_t fe;
+            im_event_t fe;
             memset(&fe, 0, sizeof(fe));
             fe.type      = inotify_mask_to_fim(ev->mask);
-            fe.source    = FIM_SOURCE_INOTIFY;
+            fe.source    = IM_SOURCE_INOTIFY;
             fe.timestamp = time(NULL);
             /* who-data: eBPF who-cache가 없으면 0/"" 유지 */
             fe.pid = 0;
@@ -209,29 +209,29 @@ static int inotify_poll_events_be(fim_backend_t *self) {
             fe.comm[0] = '\0';
 
             const char *dir_path = wd_to_path(priv, ev->wd);
-            snprintf(fe.path, FIM_MAX_PATH, "%s/%s", dir_path, ev->name);
+            snprintf(fe.path, IM_MAX_PATH, "%s/%s", dir_path, ev->name);
             strncpy(fe.filename, ev->name, sizeof(fe.filename) - 1);
 
             /* 자체 보호 경로 변경 감지 */
             if (is_protected_path(priv, fe.path)) {
                 LOG_ALERT_FIM("[inotify] self-protection path change detected: %s %s",
-                              fe.path, fim_event_type_str(fe.type));
+                              fe.path, im_event_type_str(fe.type));
             }
 
             /*
              * TODO: 파일 해시 검사 훅 포인트
              *   MODIFY 이벤트 발생 시 baseline DB 대비 무결성 검증
-             *   if (fe.type == FIM_EVENT_MODIFY) fim_hash_check(fe.path);
+             *   if (fe.type == IM_EVENT_MODIFY) im_hash_check(fe.path);
              *   구현 위치: src/scanner/baseline.c
              */
 
             /* 이벤트 큐에 push */
-            fim_queue_push(self->queue, &fe);
+            im_queue_push(self->queue, &fe);
             count++;
 
             /* 새 디렉토리 → 자동 watch 추가 */
             if ((ev->mask & IN_CREATE) && (ev->mask & IN_ISDIR)) {
-                char newdir[FIM_MAX_PATH];
+                char newdir[IM_MAX_PATH];
                 snprintf(newdir, sizeof(newdir), "%s/%s", dir_path, ev->name);
                 add_recursive_watch(priv, newdir);
             }
@@ -243,7 +243,7 @@ static int inotify_poll_events_be(fim_backend_t *self) {
     return count;
 }
 
-static void inotify_cleanup_be(fim_backend_t *self) {
+static void inotify_cleanup_be(im_backend_t *self) {
     inotify_priv_t *priv = (inotify_priv_t *)self->priv;
     if (!priv) return;
 
@@ -257,8 +257,8 @@ static void inotify_cleanup_be(fim_backend_t *self) {
 }
     
 /* ── 생성 함수 ─────────────────────────────────── */
-fim_backend_t *fim_inotify_create(void) {
-    fim_backend_t *be = calloc(1, sizeof(fim_backend_t));
+im_backend_t *im_inotify_create(void) {
+    im_backend_t *be = calloc(1, sizeof(im_backend_t));
     if (!be) return NULL;
 
     be->name         = "inotify";

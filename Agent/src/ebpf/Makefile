@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-# Makefile — fim_trace eBPF 빌드 (skeleton 생성)
+# Makefile — im_trace eBPF 빌드 (skeleton 생성)
 #
 # 출력물:
-#   .output/fim_trace.bpf.o  — 검증된 BPF 오브젝트 (중간 산출물)
-#   fim_trace.skel.h          — 유저스페이스 로더(fim_trace.c)용 C 스켈레톤 헤더
+#   .output/im_trace.bpf.o  — 검증된 BPF 오브젝트 (중간 산출물)
+#   im_trace.skel.h          — 유저스페이스 로더(im_trace.c)용 C 스켈레톤 헤더
 #
 # 사용법:
 #   make            빌드 + 스켈레톤 헤더 생성 (기본)
@@ -52,7 +52,7 @@ else
   MAKEFLAGS += --no-print-directory
 endif
 
-APP := fim_trace
+APP := im_trace
 
 ifeq ($(BPFTOOL),)
   $(error bpftool not found. Install with: sudo apt install linux-tools-$(shell uname -r) linux-tools-common)
@@ -92,7 +92,7 @@ $(OUTPUT)/$(APP).bpf.o: $(OUTPUT)/$(APP).tmp.bpf.o
 
 # ── 3단계: bpftool gen skeleton — C 스켈레톤 헤더 생성 ──────────────────────
 #
-# 유저스페이스(fim_trace.c)에서 #include "fim_trace.skel.h" 로 사용
+# 유저스페이스(im_trace.c)에서 #include "im_trace.skel.h" 로 사용
 # BPF 오브젝트 로드·attach·맵 접근을 위한 래퍼 구조체/함수 자동 생성
 
 $(APP).skel.h: $(OUTPUT)/$(APP).bpf.o

@@ -18,8 +18,8 @@
 #include <linux/xattr.h>
 #include <asm/unistd.h>
 
-#include "../fim_lkm_policy.h"
-#include "../fim_lkm_events.h"
+#include "../im_lkm_policy.h"
+#include "../im_lkm_events.h"
 
 typedef void *(*sys_call_ptr_t)(void);
 
@@ -69,11 +69,11 @@ static orig_lsetxattr_t  orig_sys_lsetxattr;
 static orig_fsetxattr_t  orig_sys_fsetxattr;
 
 // cr0 wp bit confusion
-static unsigned long fim_force_order;
+static unsigned long im_force_order;
 
 static inline void mywrite_cr0(unsigned long val)
 {
-    asm volatile("mov %0,%%cr0" : "+r"(val), "+m"(fim_force_order));
+    asm volatile("mov %0,%%cr0" : "+r"(val), "+m"(im_force_order));
 }
 
 static void disable_write_protection(void)
@@ -134,7 +134,7 @@ static int fd_to_devino(unsigned int fd, uint64_t *dev, uint64_t *ino)
     return 1;
 }
 
-static long fim_check(uint64_t dev, uint64_t ino, uint32_t op,
+static long im_check(uint64_t dev, uint64_t ino, uint32_t op,
                        const char *op_name)
 {
     uint32_t block_mode;
@@ -142,38 +142,38 @@ static long fim_check(uint64_t dev, uint64_t ino, uint32_t op,
     if (!inode_policy_lookup(dev, ino, op, &block_mode))
         return 0;
 
-    if (block_mode == FIM_BLOCK_DENY) {
+    if (block_mode == IM_BLOCK_DENY) {
         pr_info("DENY %s: comm=%s dev=%llu ino=%llu\n",
                 op_name, current->comm, dev, ino);
-        fim_event_enqueue(dev, ino, op, 1);
+        im_event_enqueue(dev, ino, op, 1);
         return -EPERM;
     }
 
-    fim_event_enqueue(dev, ino, op, 0);
+    im_event_enqueue(dev, ino, op, 0);
     return 0;
 }
 
-static long fim_check_delete(uint64_t dev, uint64_t ino)
+static long im_check_delete(uint64_t dev, uint64_t ino)
 {
     uint32_t block_mode;
 
-    if (!inode_policy_lookup(dev, ino, FIM_OP_DELETE, &block_mode))
+    if (!inode_policy_lookup(dev, ino, IM_OP_DELETE, &block_mode))
         return 0;
 
-    if (block_mode == FIM_BLOCK_DENY) {
+    if (block_mode == IM_BLOCK_DENY) {
         pr_info("DENY delete: comm=%s dev=%llu ino=%llu\n",
                 current->comm, dev, ino);
-        fim_event_enqueue(dev, ino, FIM_OP_DELETE, 1);
+        im_event_enqueue(dev, ino, IM_OP_DELETE, 1);
         return -EPERM;
     }
 
-    fim_event_enqueue(dev, ino, FIM_OP_DELETE, 0);
+    im_event_enqueue(dev, ino, IM_OP_DELETE, 0);
     inode_policy_remove(dev, ino);
     return 0;
 }
 
 
-static asmlinkage long fim_sys_write(unsigned int fd,
+static asmlinkage long im_sys_write(unsigned int fd,
                                      const char __user *buf,
                                      size_t count)
 {
@@ -181,33 +181,33 @@ static asmlinkage long fim_sys_write(unsigned int fd,
     long rc = 0;
 
     if (fd_to_devino(fd, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "write");
+        rc = im_check(dev, ino, IM_OP_WRITE, "write");
 
     if (rc)
         return rc;
     return orig_sys_write(fd, buf, count);
 }
 
-static asmlinkage long fim_sys_truncate(const char __user *path, long length)
+static asmlinkage long im_sys_truncate(const char __user *path, long length)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino(path, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "truncate");
+        rc = im_check(dev, ino, IM_OP_WRITE, "truncate");
 
     if (rc)
         return rc;
     return orig_sys_truncate(path, length);
 }
 
-static asmlinkage long fim_sys_ftruncate(unsigned int fd, unsigned long length)
+static asmlinkage long im_sys_ftruncate(unsigned int fd, unsigned long length)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (fd_to_devino(fd, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "ftruncate");
+        rc = im_check(dev, ino, IM_OP_WRITE, "ftruncate");
 
     if (rc)
         return rc;
@@ -223,10 +223,10 @@ static long check_open_flags(int dfd, const char __user *upath, int flags)
 
     if (!pathat_to_devino(dfd, upath, &dev, &ino))
         return 0;
-    return fim_check(dev, ino, FIM_OP_WRITE, "open");
+    return im_check(dev, ino, IM_OP_WRITE, "open");
 }
 
-static asmlinkage long fim_sys_open(const char __user *filename,
+static asmlinkage long im_sys_open(const char __user *filename,
                                     int flags, umode_t mode)
 {
     long rc = check_open_flags(AT_FDCWD, filename, flags);
@@ -235,7 +235,7 @@ static asmlinkage long fim_sys_open(const char __user *filename,
     return orig_sys_open(filename, flags, mode);
 }
 
-static asmlinkage long fim_sys_openat(int dfd, const char __user *filename,
+static asmlinkage long im_sys_openat(int dfd, const char __user *filename,
                                       int flags, umode_t mode)
 {
     long rc = check_open_flags(dfd, filename, flags);
@@ -244,7 +244,7 @@ static asmlinkage long fim_sys_openat(int dfd, const char __user *filename,
     return orig_sys_openat(dfd, filename, flags, mode);
 }
 
-static asmlinkage long fim_sys_creat(const char __user *pathname, umode_t mode)
+static asmlinkage long im_sys_creat(const char __user *pathname, umode_t mode)
 {
     long rc = check_open_flags(AT_FDCWD, pathname, O_WRONLY | O_TRUNC);
     if (rc)
@@ -252,20 +252,20 @@ static asmlinkage long fim_sys_creat(const char __user *pathname, umode_t mode)
     return orig_sys_creat(pathname, mode);
 }
 
-static asmlinkage long fim_sys_unlink(const char __user *pathname)
+static asmlinkage long im_sys_unlink(const char __user *pathname)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino(pathname, &dev, &ino))
-        rc = fim_check_delete(dev, ino);
+        rc = im_check_delete(dev, ino);
 
     if (rc)
         return rc;
     return orig_sys_unlink(pathname);
 }
 
-static asmlinkage long fim_sys_unlinkat(int dfd,
+static asmlinkage long im_sys_unlinkat(int dfd,
                                         const char __user *pathname,
                                         int flag)
 {
@@ -273,7 +273,7 @@ static asmlinkage long fim_sys_unlinkat(int dfd,
     long rc = 0;
 
     if (!(flag & AT_REMOVEDIR) && pathat_to_devino(dfd, pathname, &dev, &ino))
-        rc = fim_check_delete(dev, ino);
+        rc = im_check_delete(dev, ino);
 
     if (rc)
         return rc;
@@ -288,17 +288,17 @@ static long check_rename(int olddfd, const char __user *oldname,
     long rc = 0;
 
     if (pathat_to_devino(olddfd, oldname, &dev, &ino)) {
-        rc = fim_check(dev, ino, FIM_OP_RENAME, "rename(src)");
+        rc = im_check(dev, ino, IM_OP_RENAME, "rename(src)");
         if (rc)
             return rc;
     }
 
     if (pathat_to_devino(newdfd, newname, &dev, &ino)) {
-        if (inode_policy_lookup(dev, ino, FIM_OP_RENAME, &block_mode)
-            && block_mode == FIM_BLOCK_DENY) {
+        if (inode_policy_lookup(dev, ino, IM_OP_RENAME, &block_mode)
+            && block_mode == IM_BLOCK_DENY) {
             pr_info("DENY rename(dst): comm=%s dev=%llu ino=%llu\n",
                     current->comm, dev, ino);
-            fim_event_enqueue(dev, ino, FIM_OP_RENAME, 1);
+            im_event_enqueue(dev, ino, IM_OP_RENAME, 1);
             return -EPERM;
         }
     }
@@ -306,7 +306,7 @@ static long check_rename(int olddfd, const char __user *oldname,
     return 0;
 }
 
-static asmlinkage long fim_sys_rename(const char __user *oldname,
+static asmlinkage long im_sys_rename(const char __user *oldname,
                                       const char __user *newname)
 {
     long rc = check_rename(AT_FDCWD, oldname, AT_FDCWD, newname);
@@ -315,7 +315,7 @@ static asmlinkage long fim_sys_rename(const char __user *oldname,
     return orig_sys_rename(oldname, newname);
 }
 
-static asmlinkage long fim_sys_renameat(int olddfd,
+static asmlinkage long im_sys_renameat(int olddfd,
                                         const char __user *oldname,
                                         int newdfd,
                                         const char __user *newname)
@@ -327,7 +327,7 @@ static asmlinkage long fim_sys_renameat(int olddfd,
 }
 
 #ifdef __NR_renameat2
-static asmlinkage long fim_sys_renameat2(int olddfd,
+static asmlinkage long im_sys_renameat2(int olddfd,
                                          const char __user *oldname,
                                          int newdfd,
                                          const char __user *newname,
@@ -340,20 +340,20 @@ static asmlinkage long fim_sys_renameat2(int olddfd,
 }
 #endif
 
-static asmlinkage long fim_sys_chmod(const char __user *filename, umode_t mode)
+static asmlinkage long im_sys_chmod(const char __user *filename, umode_t mode)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino(filename, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "chmod");
+        rc = im_check(dev, ino, IM_OP_WRITE, "chmod");
 
     if (rc)
         return rc;
     return orig_sys_chmod(filename, mode);
 }
 
-static asmlinkage long fim_sys_fchmodat(int dfd,
+static asmlinkage long im_sys_fchmodat(int dfd,
                                         const char __user *filename,
                                         umode_t mode)
 {
@@ -361,28 +361,28 @@ static asmlinkage long fim_sys_fchmodat(int dfd,
     long rc = 0;
 
     if (pathat_to_devino(dfd, filename, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "fchmodat");
+        rc = im_check(dev, ino, IM_OP_WRITE, "fchmodat");
 
     if (rc)
         return rc;
     return orig_sys_fchmodat(dfd, filename, mode);
 }
 
-static asmlinkage long fim_sys_chown(const char __user *filename,
+static asmlinkage long im_sys_chown(const char __user *filename,
                                      uid_t user, gid_t group)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino(filename, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "chown");
+        rc = im_check(dev, ino, IM_OP_WRITE, "chown");
 
     if (rc)
         return rc;
     return orig_sys_chown(filename, user, group);
 }
 
-static asmlinkage long fim_sys_fchownat(int dfd,
+static asmlinkage long im_sys_fchownat(int dfd,
                                         const char __user *filename,
                                         uid_t user, gid_t group, int flag)
 {
@@ -390,28 +390,28 @@ static asmlinkage long fim_sys_fchownat(int dfd,
     long rc = 0;
 
     if (pathat_to_devino(dfd, filename, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "fchownat");
+        rc = im_check(dev, ino, IM_OP_WRITE, "fchownat");
 
     if (rc)
         return rc;
     return orig_sys_fchownat(dfd, filename, user, group, flag);
 }
 
-static asmlinkage long fim_sys_link(const char __user *oldname,
+static asmlinkage long im_sys_link(const char __user *oldname,
                                     const char __user *newname)
 {
     uint64_t dev, ino;
     long rc = 0;
 
     if (path_to_devino(oldname, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "link");
+        rc = im_check(dev, ino, IM_OP_WRITE, "link");
 
     if (rc)
         return rc;
     return orig_sys_link(oldname, newname);
 }
 
-static asmlinkage long fim_sys_linkat(int olddfd,
+static asmlinkage long im_sys_linkat(int olddfd,
                                       const char __user *oldname,
                                       int newdfd,
                                       const char __user *newname,
@@ -421,14 +421,14 @@ static asmlinkage long fim_sys_linkat(int olddfd,
     long rc = 0;
 
     if (pathat_to_devino(olddfd, oldname, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "linkat");
+        rc = im_check(dev, ino, IM_OP_WRITE, "linkat");
 
     if (rc)
         return rc;
     return orig_sys_linkat(olddfd, oldname, newdfd, newname, flags);
 }
 
-static asmlinkage long fim_sys_setxattr(const char __user *path,
+static asmlinkage long im_sys_setxattr(const char __user *path,
                                         const char __user *name,
                                         const void __user *value,
                                         size_t size, int flags)
@@ -437,14 +437,14 @@ static asmlinkage long fim_sys_setxattr(const char __user *path,
     long rc = 0;
 
     if (path_to_devino(path, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "setxattr");
+        rc = im_check(dev, ino, IM_OP_WRITE, "setxattr");
 
     if (rc)
         return rc;
     return orig_sys_setxattr(path, name, value, size, flags);
 }
 
-static asmlinkage long fim_sys_lsetxattr(const char __user *path,
+static asmlinkage long im_sys_lsetxattr(const char __user *path,
                                          const char __user *name,
                                          const void __user *value,
                                          size_t size, int flags)
@@ -453,14 +453,14 @@ static asmlinkage long fim_sys_lsetxattr(const char __user *path,
     long rc = 0;
 
     if (path_to_devino(path, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "lsetxattr");
+        rc = im_check(dev, ino, IM_OP_WRITE, "lsetxattr");
 
     if (rc)
         return rc;
     return orig_sys_lsetxattr(path, name, value, size, flags);
 }
 
-static asmlinkage long fim_sys_fsetxattr(int fd,
+static asmlinkage long im_sys_fsetxattr(int fd,
                                          const char __user *name,
                                          const void __user *value,
                                          size_t size, int flags)
@@ -469,7 +469,7 @@ static asmlinkage long fim_sys_fsetxattr(int fd,
     long rc = 0;
 
     if (fd_to_devino(fd, &dev, &ino))
-        rc = fim_check(dev, ino, FIM_OP_WRITE, "fsetxattr");
+        rc = im_check(dev, ino, IM_OP_WRITE, "fsetxattr");
 
     if (rc)
         return rc;
@@ -478,12 +478,12 @@ static asmlinkage long fim_sys_fsetxattr(int fd,
 
 #define HOOK(name) \
     orig_sys_##name = (orig_##name##_t)sys_call_table[__NR_##name]; \
-    sys_call_table[__NR_##name] = (sys_call_ptr_t)fim_sys_##name
+    sys_call_table[__NR_##name] = (sys_call_ptr_t)im_sys_##name
 
 #define UNHOOK(name) \
     sys_call_table[__NR_##name] = (sys_call_ptr_t)orig_sys_##name
 
-int fim_hooks_init(void)
+int im_hooks_init(void)
 {
     sys_call_table = (sys_call_ptr_t *)
         kallsyms_lookup_name("sys_call_table");
@@ -521,7 +521,7 @@ int fim_hooks_init(void)
     return 0;
 }
 
-void fim_hooks_exit(void)
+void im_hooks_exit(void)
 {
     if (!sys_call_table)
         return;

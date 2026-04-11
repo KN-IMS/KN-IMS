@@ -1,5 +1,5 @@
 /*
- * fim_queue.c — 스레드 안전 이벤트 큐
+ * im_queue.c — 스레드 안전 이벤트 큐
  *
  * fanotify 스레드와 inotify 스레드가 각각 이벤트를 push하고,
  * 메인 스레드(이벤트 처리기)가 pop해서 통합 처리합니다.
@@ -13,8 +13,8 @@
 #include <sys/time.h>
 #include "realtime/monitor.h"
 
-int fim_queue_init(fim_event_queue_t *q) {
-    memset(q, 0, sizeof(fim_event_queue_t));
+int im_queue_init(im_event_queue_t *q) {
+    memset(q, 0, sizeof(im_event_queue_t));
     q->head  = 0;
     q->tail  = 0;
     q->count = 0;
@@ -25,23 +25,23 @@ int fim_queue_init(fim_event_queue_t *q) {
     return 0;
 }
 
-void fim_queue_destroy(fim_event_queue_t *q) {
+void im_queue_destroy(im_event_queue_t *q) {
     pthread_mutex_destroy(&q->lock);
     pthread_cond_destroy(&q->not_empty);
 }
 
-int fim_queue_push(fim_event_queue_t *q, const fim_event_t *ev) {
+int im_queue_push(im_event_queue_t *q, const im_event_t *ev) {
     pthread_mutex_lock(&q->lock);
 
-    if (q->count >= FIM_EVENT_QUEUE_SIZE) {
+    if (q->count >= IM_EVENT_QUEUE_SIZE) {
         /* 큐 가득 참 → 가장 오래된 이벤트 드롭, 카운터 증가 */
-        q->head = (q->head + 1) % FIM_EVENT_QUEUE_SIZE;
+        q->head = (q->head + 1) % IM_EVENT_QUEUE_SIZE;
         q->count--;
         q->dropped++;
     }
 
     q->events[q->tail] = *ev;
-    q->tail = (q->tail + 1) % FIM_EVENT_QUEUE_SIZE;
+    q->tail = (q->tail + 1) % IM_EVENT_QUEUE_SIZE;
     q->count++;
 
     pthread_cond_signal(&q->not_empty);
@@ -49,14 +49,14 @@ int fim_queue_push(fim_event_queue_t *q, const fim_event_t *ev) {
     return 0;
 }
 
-uint64_t fim_queue_dropped(fim_event_queue_t *q) {
+uint64_t im_queue_dropped(im_event_queue_t *q) {
     pthread_mutex_lock(&q->lock);
     uint64_t n = q->dropped;
     pthread_mutex_unlock(&q->lock);
     return n;
 }
 
-int fim_queue_pop(fim_event_queue_t *q, fim_event_t *ev, int timeout_ms) {
+int im_queue_pop(im_event_queue_t *q, im_event_t *ev, int timeout_ms) {
     pthread_mutex_lock(&q->lock);
 
     while (q->count == 0) {
@@ -83,7 +83,7 @@ int fim_queue_pop(fim_event_queue_t *q, fim_event_t *ev, int timeout_ms) {
     }
 
     *ev = q->events[q->head];
-    q->head = (q->head + 1) % FIM_EVENT_QUEUE_SIZE;
+    q->head = (q->head + 1) % IM_EVENT_QUEUE_SIZE;
     q->count--;
 
     pthread_mutex_unlock(&q->lock);

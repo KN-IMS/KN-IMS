@@ -1,18 +1,18 @@
 #!/bin/bash
-# bench_fim_agent.sh — fim_agent + LKM 오버헤드 측정
+# bench_agent.sh — agent + LKM 오버헤드 측정
 #
 # 비교 구조:
-#   ① 베이스라인  : fim_agent/LKM 없이 파일 오퍼레이션
-#   ② fim_agent + LKM : 동일 오퍼레이션 반복
+#   ① 베이스라인  : agent/LKM 없이 파일 오퍼레이션
+#   ② agent + LKM : 동일 오퍼레이션 반복
 #   → 처리량 감소율 / sy% 증가 / 메모리 증가 비율 출력
 #
 # 사용법:
-#   ./bench_fim_agent.sh --agent <path> --lkm <path> [옵션]
+#   ./bench_agent.sh --agent <path> --lkm <path> [옵션]
 #
 # 옵션:
-#   --agent <path>    fim_agent 바이너리  (기본: ../build/fim_agent)
+#   --agent <path>    agent 바이너리      (기본: ../build/agent)
 #   --conf  <path>    설정 파일           (기본: ../configs/test.conf)
-#   --lkm   <path>    fim_lkm.ko 경로    (필수)
+#   --lkm   <path>    im_lkm.ko 경로    (필수)
 #   --files <n>       파일 수             (기본: 1000)
 #   --out   <path>    결과 파일           (기본: ./bench_result_<ts>.txt)
 #
@@ -25,11 +25,11 @@ set -euo pipefail
 
 # ── 기본값 ────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-AGENT_BIN="$SCRIPT_DIR/../build/fim_agent"
+AGENT_BIN="$SCRIPT_DIR/../build/agent"
 CONF_FILE="$SCRIPT_DIR/../configs/test.conf"
 LKM_KO=""
 FILE_COUNT=1000
-WATCH_DIR="/tmp/fim_bench_$$"
+WATCH_DIR="/tmp/im_bench_$$"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUT_FILE="$SCRIPT_DIR/bench_result_${TIMESTAMP}.txt"
 
@@ -45,7 +45,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$LKM_KO" ]]; then
-    echo "ERROR: --lkm <fim_lkm.ko> 필수"
+    echo "ERROR: --lkm <im_lkm.ko> 필수"
     exit 1
 fi
 
@@ -148,9 +148,9 @@ judge_rss() {          # RSS 증가 (KB)
 AGENT_PID=""
 cleanup() {
     [[ -n "$AGENT_PID" ]] && kill "$AGENT_PID" 2>/dev/null || true
-    lsmod | grep -q fim_lkm 2>/dev/null && sudo rmmod fim_lkm 2>/dev/null || true
+    lsmod | grep -q im_lkm 2>/dev/null && sudo rmmod im_lkm 2>/dev/null || true
     rm -rf "$WATCH_DIR"
-    rm -f /tmp/fim_bench_$$.conf
+    rm -f /tmp/im_bench_$$.conf
 }
 trap cleanup EXIT
 
@@ -161,7 +161,7 @@ mkdir -p "$WATCH_DIR"
 : > "$OUT_FILE"
 
 sep
-log "▶ 베이스라인 측정 (fim_agent/LKM 없음, files=$FILE_COUNT, ${REPEAT}회 평균)"
+log "▶ 베이스라인 측정 (agent/LKM 없음, files=$FILE_COUNT, ${REPEAT}회 평균)"
 sep
 
 BASE_SY=$(sample_sy 3)
@@ -195,40 +195,40 @@ BASE_RSS_KB=0
 sep
 
 # ══════════════════════════════════════════════════════════════
-# ② fim_agent + LKM
+# ② agent + LKM
 # ══════════════════════════════════════════════════════════════
 log "▶ LKM 적재: $LKM_KO"
 sudo insmod "$LKM_KO"
-LKM_SIZE=$(cat /proc/modules | grep "^fim_lkm " | awk '{print $2}')
-log "  fim_lkm 모듈 크기: ${LKM_SIZE} bytes"
+LKM_SIZE=$(cat /proc/modules | grep "^im_lkm " | awk '{print $2}')
+log "  im_lkm 모듈 크기: ${LKM_SIZE} bytes"
 
 # test.conf 의 watch 경로를 WATCH_DIR 로 교체
-TMP_CONF="/tmp/fim_bench_$$.conf"
-sed "s|/tmp/fim_test/|$WATCH_DIR/|g" "$CONF_FILE" > "$TMP_CONF"
+TMP_CONF="/tmp/im_bench_$$.conf"
+sed "s|/tmp/im_test/|$WATCH_DIR/|g" "$CONF_FILE" > "$TMP_CONF"
 
-log "▶ fim_agent 시작: $AGENT_BIN"
+log "▶ agent 시작: $AGENT_BIN"
 "$AGENT_BIN" -c "$TMP_CONF" &
 AGENT_PID=$!
 sleep 1
 
 if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-    log "ERROR: fim_agent 시작 실패"
+    log "ERROR: agent 시작 실패"
     exit 1
 fi
-log "  fim_agent PID: $AGENT_PID"
+log "  agent PID: $AGENT_PID"
 
 IDLE_RSS=$(get_rss_kb "$AGENT_PID")
 log "  RSS (idle): ${IDLE_RSS}kB"
 
 sep
-log "▶ fim_agent + LKM 부하 측정 (files=$FILE_COUNT, ${REPEAT}회 평균)"
+log "▶ agent + LKM 부하 측정 (files=$FILE_COUNT, ${REPEAT}회 평균)"
 
 # 캐시 드롭 — 베이스라인과 동일 조건
 sync
 echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null
 log "  페이지 캐시 드롭 완료"
 
-# vmstat을 파일로 수집 (백그라운드) — wait으로 fim_agent까지 대기하는 버그 방지
+# vmstat을 파일로 수집 (백그라운드) — wait으로 agent까지 대기하는 버그 방지
 VMSTAT_TMP=$(mktemp)
 vmstat 1 30 > "$VMSTAT_TMP" &
 VMSTAT_PID=$!
@@ -237,47 +237,47 @@ run_ops "$WATCH_DIR" "$FILE_COUNT"
 
 kill "$VMSTAT_PID" 2>/dev/null || true
 wait "$VMSTAT_PID" 2>/dev/null || true
-FIM_SY_LOAD=$(awk 'NR>2 {sum+=$15; n++} END {printf "%.1f", (n>0 ? sum/n : 0)}' "$VMSTAT_TMP")
+IM_SY_LOAD=$(awk 'NR>2 {sum+=$15; n++} END {printf "%.1f", (n>0 ? sum/n : 0)}' "$VMSTAT_TMP")
 rm -f "$VMSTAT_TMP"
 
-FIM_WRITE_MS=$WRITE_MS
-FIM_RENAME_MS=$RENAME_MS
-FIM_DELETE_MS=$DELETE_MS
-FIM_LOAD_RSS=$(get_rss_kb "$AGENT_PID")
+IM_WRITE_MS=$WRITE_MS
+IM_RENAME_MS=$RENAME_MS
+IM_DELETE_MS=$DELETE_MS
+IM_LOAD_RSS=$(get_rss_kb "$AGENT_PID")
 
-log "  write  : ${FIM_WRITE_MS}ms  ($(( FILE_COUNT * 1000 / (FIM_WRITE_MS+1) )) files/sec)"
-log "  rename : ${FIM_RENAME_MS}ms  ($(( FILE_COUNT * 1000 / (FIM_RENAME_MS+1) )) files/sec)"
-log "  delete : ${FIM_DELETE_MS}ms  ($(( FILE_COUNT * 1000 / (FIM_DELETE_MS+1) )) files/sec)"
-log "  sy% (during load): ${FIM_SY_LOAD}%"
-log "  RSS (load): ${FIM_LOAD_RSS}kB"
+log "  write  : ${IM_WRITE_MS}ms  ($(( FILE_COUNT * 1000 / (IM_WRITE_MS+1) )) files/sec)"
+log "  rename : ${IM_RENAME_MS}ms  ($(( FILE_COUNT * 1000 / (IM_RENAME_MS+1) )) files/sec)"
+log "  delete : ${IM_DELETE_MS}ms  ($(( FILE_COUNT * 1000 / (IM_DELETE_MS+1) )) files/sec)"
+log "  sy% (during load): ${IM_SY_LOAD}%"
+log "  RSS (load): ${IM_LOAD_RSS}kB"
 
 # ══════════════════════════════════════════════════════════════
 # 결과 비교표
 # ══════════════════════════════════════════════════════════════
 sep
-log "▶ 결과 비교 (베이스라인 vs fim_agent+LKM)"
+log "▶ 결과 비교 (베이스라인 vs agent+LKM)"
 sep
 
-WRITE_PCT=$(pct_change  $BASE_WRITE_MS  $FIM_WRITE_MS)
-RENAME_PCT=$(pct_change $BASE_RENAME_MS $FIM_RENAME_MS)
-DELETE_PCT=$(pct_change $BASE_DELETE_MS $FIM_DELETE_MS)
-SY_DIFF=$(awk "BEGIN {printf \"%.1f\", $FIM_SY_LOAD - $BASE_SY_LOAD}")
-RSS_DIFF=$(( FIM_LOAD_RSS - BASE_RSS_KB ))
+WRITE_PCT=$(pct_change  $BASE_WRITE_MS  $IM_WRITE_MS)
+RENAME_PCT=$(pct_change $BASE_RENAME_MS $IM_RENAME_MS)
+DELETE_PCT=$(pct_change $BASE_DELETE_MS $IM_DELETE_MS)
+SY_DIFF=$(awk "BEGIN {printf \"%.1f\", $IM_SY_LOAD - $BASE_SY_LOAD}")
+RSS_DIFF=$(( IM_LOAD_RSS - BASE_RSS_KB ))
 
 printf "%-20s %10s %10s %10s %s\n" \
-    "항목" "베이스라인" "fim+LKM" "변화율" "판정" | tee -a "$OUT_FILE"
+    "항목" "베이스라인" "im+LKM" "변화율" "판정" | tee -a "$OUT_FILE"
 printf "%-20s %10s %10s %10s %s\n" \
-    "write (ms)"  "${BASE_WRITE_MS}"  "${FIM_WRITE_MS}"  "${WRITE_PCT}%"  "$(judge_throughput $WRITE_PCT)"  | tee -a "$OUT_FILE"
+    "write (ms)"  "${BASE_WRITE_MS}"  "${IM_WRITE_MS}"  "${WRITE_PCT}%"  "$(judge_throughput $WRITE_PCT)"  | tee -a "$OUT_FILE"
 printf "%-20s %10s %10s %10s %s\n" \
-    "rename (ms)" "${BASE_RENAME_MS}" "${FIM_RENAME_MS}" "${RENAME_PCT}%" "$(judge_throughput $RENAME_PCT)" | tee -a "$OUT_FILE"
+    "rename (ms)" "${BASE_RENAME_MS}" "${IM_RENAME_MS}" "${RENAME_PCT}%" "$(judge_throughput $RENAME_PCT)" | tee -a "$OUT_FILE"
 printf "%-20s %10s %10s %10s %s\n" \
-    "delete (ms)" "${BASE_DELETE_MS}" "${FIM_DELETE_MS}" "${DELETE_PCT}%" "$(judge_throughput $DELETE_PCT)" | tee -a "$OUT_FILE"
+    "delete (ms)" "${BASE_DELETE_MS}" "${IM_DELETE_MS}" "${DELETE_PCT}%" "$(judge_throughput $DELETE_PCT)" | tee -a "$OUT_FILE"
 printf "%-20s %10s %10s %10s %s\n" \
-    "sy% (load)"  "${BASE_SY_LOAD}"   "${FIM_SY_LOAD}"  "+${SY_DIFF}%p" "$(judge_sy $SY_DIFF)"            | tee -a "$OUT_FILE"
+    "sy% (load)"  "${BASE_SY_LOAD}"   "${IM_SY_LOAD}"  "+${SY_DIFF}%p" "$(judge_sy $SY_DIFF)"            | tee -a "$OUT_FILE"
 printf "%-20s %10s %10s %10s %s\n" \
-    "RSS (kB)"    "0"                 "${FIM_LOAD_RSS}" "+${RSS_DIFF}kB" "$(judge_rss $RSS_DIFF)"          | tee -a "$OUT_FILE"
+    "RSS (kB)"    "0"                 "${IM_LOAD_RSS}" "+${RSS_DIFF}kB" "$(judge_rss $RSS_DIFF)"          | tee -a "$OUT_FILE"
 printf "%-20s %10s\n" \
-    "fim_lkm size" "${LKM_SIZE}B" | tee -a "$OUT_FILE"
+    "im_lkm size" "${LKM_SIZE}B" | tee -a "$OUT_FILE"
 
 sep
 log "결과 저장: $OUT_FILE"

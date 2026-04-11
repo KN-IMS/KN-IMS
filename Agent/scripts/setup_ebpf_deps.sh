@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup_ebpf_deps.sh — fim_monitor eBPF 빌드 의존성 설치
+# setup_ebpf_deps.sh — im_monitor eBPF 빌드 의존성 설치
 #
 # eBPF 전용 (LSM 훅, kernel 5.8+ 필수)
 # LKM 의존성은 scripts/setup_lkm_env.sh 참조
@@ -426,7 +426,7 @@ print_summary() {
 # ── 메인 ───────────────────────────────────────────────────
 main() {
     echo ""
-    info "fim_monitor eBPF 의존성 설치 시작"
+    info "im_monitor eBPF 의존성 설치 시작"
     echo ""
 
     detect_env

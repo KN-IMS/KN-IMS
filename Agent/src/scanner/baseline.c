@@ -23,7 +23,7 @@
 
 /* ── SHA-256 계산 ────────────────────────────────── */
 
-int fim_sha256_file(const char *path, char out_hex[65]) {
+int im_sha256_file(const char *path, char out_hex[65]) {
     FILE *fp = fopen(path, "rb");
     if (!fp) return -1;
 
@@ -56,10 +56,10 @@ int fim_sha256_file(const char *path, char out_hex[65]) {
 
 /* ── 동적 배열 헬퍼 ──────────────────────────────── */
 
-static int result_grow(fim_scan_result_t *r) {
+static int result_grow(im_scan_result_t *r) {
     int new_cap = (r->capacity == 0) ? 256 : r->capacity * 2;
-    fim_scan_entry_t *p = realloc(r->entries,
-                                   (size_t)new_cap * sizeof(fim_scan_entry_t));
+    im_scan_entry_t *p = realloc(r->entries,
+                                   (size_t)new_cap * sizeof(im_scan_entry_t));
     if (!p) return -1;
     r->entries  = p;
     r->capacity = new_cap;
@@ -69,7 +69,7 @@ static int result_grow(fim_scan_result_t *r) {
 /* ── walker 콜백 ─────────────────────────────────── */
 
 static int scan_cb(const char *path, const struct stat *st, void *userdata) {
-    fim_scan_result_t *result = (fim_scan_result_t *)userdata;
+    im_scan_result_t *result = (im_scan_result_t *)userdata;
 
     if (result->count >= result->capacity) {
         if (result_grow(result) < 0) {
@@ -79,13 +79,13 @@ static int scan_cb(const char *path, const struct stat *st, void *userdata) {
         }
     }
 
-    fim_scan_entry_t *e = &result->entries[result->count];
-    strncpy(e->path, path, FIM_MAX_PATH - 1);
-    e->path[FIM_MAX_PATH - 1] = '\0';
+    im_scan_entry_t *e = &result->entries[result->count];
+    strncpy(e->path, path, IM_MAX_PATH - 1);
+    e->path[IM_MAX_PATH - 1] = '\0';
     e->mtime = st->st_mtime;
     e->size  = st->st_size;
 
-    if (fim_sha256_file(path, e->hash) < 0) {
+    if (im_sha256_file(path, e->hash) < 0) {
         LOG_WARN_FIM("[baseline] 해시 실패 (권한?): %s", path);
         result->errors++;
         return 0;  /* 스킵하고 계속 */
@@ -97,7 +97,7 @@ static int scan_cb(const char *path, const struct stat *st, void *userdata) {
 
 /* ── 전체 스캔 함수 (내부 빌드에서 재사용) ──────── */
 
-int fim_baseline_scan(fim_config_t *cfg, fim_scan_result_t *out) {
+int im_baseline_scan(im_config_t *cfg, im_scan_result_t *out) {
     memset(out, 0, sizeof(*out));
 
     for (int i = 0; i < cfg->watch_count; i++) {
@@ -106,7 +106,7 @@ int fim_baseline_scan(fim_config_t *cfg, fim_scan_result_t *out) {
 
         LOG_INFO_FIM("[baseline] 스캔 시작: %s (recursive=%d)", path, recursive);
 
-        int n = fim_walk(path, recursive, scan_cb, out);
+        int n = im_walk(path, recursive, scan_cb, out);
         if (n < 0) {
             LOG_WARN_FIM("[baseline] 순회 실패: %s", path);
             continue;
@@ -120,7 +120,7 @@ int fim_baseline_scan(fim_config_t *cfg, fim_scan_result_t *out) {
     return out->count;
 }
 
-void fim_scan_result_free(fim_scan_result_t *result) {
+void im_scan_result_free(im_scan_result_t *result) {
     if (result->entries) {
         free(result->entries);
         result->entries = NULL;
@@ -132,29 +132,29 @@ void fim_scan_result_free(fim_scan_result_t *result) {
 
 /* ── 로컬 베이스라인 DB 구현 ─────────────────────── */
 
-int fim_baseline_db_init(fim_baseline_db_t *db) {
+int im_baseline_db_init(im_baseline_db_t *db) {
     memset(db, 0, sizeof(*db));
     if (pthread_rwlock_init(&db->lock, NULL) != 0) return -1;
     return 0;
 }
 
-int fim_baseline_db_build(fim_baseline_db_t *db, fim_config_t *cfg) {
+int im_baseline_db_build(im_baseline_db_t *db, im_config_t *cfg) {
     pthread_rwlock_wrlock(&db->lock);
-    fim_scan_result_free(&db->data);
-    int n = fim_baseline_scan(cfg, &db->data);
+    im_scan_result_free(&db->data);
+    int n = im_baseline_scan(cfg, &db->data);
     pthread_rwlock_unlock(&db->lock);
     return n;
 }
 
-fim_integrity_result_t fim_baseline_check_file(fim_baseline_db_t *db,
+im_integrity_result_t im_baseline_check_file(im_baseline_db_t *db,
                                                const char *path,
                                                char out_expected[65],
                                                char out_actual[65]) {
     char actual[65];
-    if (fim_sha256_file(path, actual) < 0) {
+    if (im_sha256_file(path, actual) < 0) {
         if (out_actual)   out_actual[0]   = '\0';
         if (out_expected) out_expected[0] = '\0';
-        return FIM_INTEGRITY_ERROR;
+        return IM_INTEGRITY_ERROR;
     }
     if (out_actual) strncpy(out_actual, actual, 65);
 
@@ -163,9 +163,9 @@ fim_integrity_result_t fim_baseline_check_file(fim_baseline_db_t *db,
         if (strcmp(db->data.entries[i].path, path) == 0) {
             const char *expected = db->data.entries[i].hash;
             if (out_expected) strncpy(out_expected, expected, 65);
-            fim_integrity_result_t r = (strcmp(actual, expected) == 0)
-                                     ? FIM_INTEGRITY_MATCH
-                                     : FIM_INTEGRITY_MISMATCH;
+            im_integrity_result_t r = (strcmp(actual, expected) == 0)
+                                     ? IM_INTEGRITY_MATCH
+                                     : IM_INTEGRITY_MISMATCH;
             pthread_rwlock_unlock(&db->lock);
             return r;
         }
@@ -173,14 +173,14 @@ fim_integrity_result_t fim_baseline_check_file(fim_baseline_db_t *db,
     pthread_rwlock_unlock(&db->lock);
 
     if (out_expected) out_expected[0] = '\0';
-    return FIM_INTEGRITY_NEW;
+    return IM_INTEGRITY_NEW;
 }
 
-void fim_baseline_db_update(fim_baseline_db_t *db, const char *path) {
+void im_baseline_db_update(im_baseline_db_t *db, const char *path) {
     char hash[65];
     struct stat st;
 
-    if (fim_sha256_file(path, hash) < 0) return;
+    if (im_sha256_file(path, hash) < 0) return;
     if (stat(path, &st) < 0) return;
 
     pthread_rwlock_wrlock(&db->lock);
@@ -199,8 +199,8 @@ void fim_baseline_db_update(fim_baseline_db_t *db, const char *path) {
     /* 신규 항목 추가 */
     if (db->data.count >= db->data.capacity) {
         int new_cap = (db->data.capacity == 0) ? 256 : db->data.capacity * 2;
-        fim_scan_entry_t *p = realloc(db->data.entries,
-                                       (size_t)new_cap * sizeof(fim_scan_entry_t));
+        im_scan_entry_t *p = realloc(db->data.entries,
+                                       (size_t)new_cap * sizeof(im_scan_entry_t));
         if (!p) {
             pthread_rwlock_unlock(&db->lock);
             LOG_WARN_FIM("[baseline] 메모리 부족 — %s 등록 실패", path);
@@ -210,9 +210,9 @@ void fim_baseline_db_update(fim_baseline_db_t *db, const char *path) {
         db->data.capacity = new_cap;
     }
 
-    fim_scan_entry_t *e = &db->data.entries[db->data.count];
-    strncpy(e->path, path, FIM_MAX_PATH - 1);
-    e->path[FIM_MAX_PATH - 1] = '\0';
+    im_scan_entry_t *e = &db->data.entries[db->data.count];
+    strncpy(e->path, path, IM_MAX_PATH - 1);
+    e->path[IM_MAX_PATH - 1] = '\0';
     strncpy(e->hash, hash, 65);
     e->mtime = st.st_mtime;
     e->size  = st.st_size;
@@ -221,7 +221,7 @@ void fim_baseline_db_update(fim_baseline_db_t *db, const char *path) {
     pthread_rwlock_unlock(&db->lock);
 }
 
-void fim_baseline_db_remove(fim_baseline_db_t *db, const char *path) {
+void im_baseline_db_remove(im_baseline_db_t *db, const char *path) {
     pthread_rwlock_wrlock(&db->lock);
     for (int i = 0; i < db->data.count; i++) {
         if (strcmp(db->data.entries[i].path, path) == 0) {
@@ -235,9 +235,9 @@ void fim_baseline_db_remove(fim_baseline_db_t *db, const char *path) {
     pthread_rwlock_unlock(&db->lock);
 }
 
-void fim_baseline_db_free(fim_baseline_db_t *db) {
+void im_baseline_db_free(im_baseline_db_t *db) {
     pthread_rwlock_wrlock(&db->lock);
-    fim_scan_result_free(&db->data);
+    im_scan_result_free(&db->data);
     pthread_rwlock_unlock(&db->lock);
     pthread_rwlock_destroy(&db->lock);
 }

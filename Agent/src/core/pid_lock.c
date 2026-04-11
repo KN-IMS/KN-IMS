@@ -41,7 +41,7 @@ int pid_lock_acquire(const char *path)
             char buf[16] = {0};
             if (read(g_lock_fd, buf, sizeof(buf) - 1) > 0)
                 syslog(LOG_WARNING,
-                    "fim-agent already running (PID %s)", buf);
+                    "agent already running (PID %s)", buf);
         } else {
             syslog(LOG_ERR, "pid_lock: fcntl failed: %s", strerror(errno));
         }
