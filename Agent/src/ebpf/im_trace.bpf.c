@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fim_trace.bpf.c — inode policy 기반 eBPF LSM 프로그램
+ * im_trace.bpf.c — inode policy 기반 eBPF LSM 프로그램
  */
 
 #include <vmlinux.h>
@@ -9,20 +9,20 @@
 #include <bpf/bpf_core_read.h>
 
 enum {
-    FIM_EBPF_OP_READ   = 0x01,
-    FIM_EBPF_OP_WRITE  = 0x02,
-    FIM_EBPF_OP_DELETE = 0x04,
-    FIM_EBPF_OP_ATTR   = 0x08,
+    IM_EBPF_OP_READ   = 0x01,
+    IM_EBPF_OP_WRITE  = 0x02,
+    IM_EBPF_OP_DELETE = 0x04,
+    IM_EBPF_OP_ATTR   = 0x08,
 };
 
 enum {
-    FIM_HOOK_FILE_PERMISSION = 1,
-    FIM_HOOK_FILE_OPEN       = 2,
-    FIM_HOOK_PATH_UNLINK     = 3,
-    FIM_HOOK_PATH_RENAME     = 4,
-    FIM_HOOK_PATH_TRUNCATE   = 5,
-    FIM_HOOK_PATH_CHMOD      = 6,
-    FIM_HOOK_INODE_SETATTR   = 7,
+    IM_HOOK_FILE_PERMISSION = 1,
+    IM_HOOK_FILE_OPEN       = 2,
+    IM_HOOK_PATH_UNLINK     = 3,
+    IM_HOOK_PATH_RENAME     = 4,
+    IM_HOOK_PATH_TRUNCATE   = 5,
+    IM_HOOK_PATH_CHMOD      = 6,
+    IM_HOOK_INODE_SETATTR   = 7,
 };
 
 #ifndef EPERM
@@ -149,9 +149,9 @@ int BPF_PROG(check_file_permission, struct file *file, int mask, int ret)
     if (!file)
         return 0;
     if (mask & MAY_READ)
-        op_mask |= FIM_EBPF_OP_READ;
+        op_mask |= IM_EBPF_OP_READ;
     if (mask & MAY_WRITE)
-        op_mask |= FIM_EBPF_OP_WRITE;
+        op_mask |= IM_EBPF_OP_WRITE;
     if (!op_mask)
         return 0;
 
@@ -159,7 +159,7 @@ int BPF_PROG(check_file_permission, struct file *file, int mask, int ret)
     if (!inode)
         return 0;
 
-    return audit_inode(inode, op_mask, FIM_HOOK_FILE_PERMISSION);
+    return audit_inode(inode, op_mask, IM_HOOK_FILE_PERMISSION);
 }
 
 SEC("lsm/file_open")
@@ -176,9 +176,9 @@ int BPF_PROG(check_file_open, struct file *file, int ret)
 
     mode = BPF_CORE_READ(file, f_mode);
     if (mode & FMODE_READ)
-        op_mask |= FIM_EBPF_OP_READ;
+        op_mask |= IM_EBPF_OP_READ;
     if (mode & FMODE_WRITE)
-        op_mask |= FIM_EBPF_OP_WRITE;
+        op_mask |= IM_EBPF_OP_WRITE;
     if (!op_mask)
         return 0;
 
@@ -186,7 +186,7 @@ int BPF_PROG(check_file_open, struct file *file, int ret)
     if (!inode)
         return 0;
 
-    return audit_inode(inode, op_mask, FIM_HOOK_FILE_OPEN);
+    return audit_inode(inode, op_mask, IM_HOOK_FILE_OPEN);
 }
 
 SEC("lsm/path_unlink")
@@ -203,7 +203,7 @@ int BPF_PROG(check_path_unlink, const struct path *dir, struct dentry *dentry, i
     if (!inode)
         return 0;
 
-    return audit_inode(inode, FIM_EBPF_OP_DELETE, FIM_HOOK_PATH_UNLINK);
+    return audit_inode(inode, IM_EBPF_OP_DELETE, IM_HOOK_PATH_UNLINK);
 }
 
 SEC("lsm/path_rename")
@@ -221,7 +221,7 @@ int BPF_PROG(check_path_rename, const struct path *old_dir, struct dentry *old_d
     if (old_dentry) {
         inode = BPF_CORE_READ(old_dentry, d_inode);
         if (inode) {
-            result = audit_inode(inode, FIM_EBPF_OP_WRITE, FIM_HOOK_PATH_RENAME);
+            result = audit_inode(inode, IM_EBPF_OP_WRITE, IM_HOOK_PATH_RENAME);
             if (result)
                 return result;
         }
@@ -233,7 +233,7 @@ int BPF_PROG(check_path_rename, const struct path *old_dir, struct dentry *old_d
     if (new_dentry) {
         inode = BPF_CORE_READ(new_dentry, d_inode);
         if (inode) {
-            result = audit_inode(inode, FIM_EBPF_OP_DELETE, FIM_HOOK_PATH_RENAME);
+            result = audit_inode(inode, IM_EBPF_OP_DELETE, IM_HOOK_PATH_RENAME);
             if (result)
                 return result;
         }
@@ -256,7 +256,7 @@ int BPF_PROG(check_path_truncate, const struct path *path, int ret)
     if (!inode)
         return 0;
 
-    return audit_inode(inode, FIM_EBPF_OP_WRITE, FIM_HOOK_PATH_TRUNCATE);
+    return audit_inode(inode, IM_EBPF_OP_WRITE, IM_HOOK_PATH_TRUNCATE);
 }
 
 SEC("lsm/path_chmod")
@@ -273,7 +273,7 @@ int BPF_PROG(check_path_chmod, const struct path *path, umode_t mode, int ret)
     if (!inode)
         return 0;
 
-    return audit_inode(inode, FIM_EBPF_OP_ATTR, FIM_HOOK_PATH_CHMOD);
+    return audit_inode(inode, IM_EBPF_OP_ATTR, IM_HOOK_PATH_CHMOD);
 }
 
 SEC("lsm/inode_setattr")
@@ -290,9 +290,9 @@ int BPF_PROG(check_inode_setattr, struct dentry *dentry, struct iattr *attr, int
 
     valid = BPF_CORE_READ(attr, ia_valid);
     if (valid & (ATTR_MODE | ATTR_UID | ATTR_GID))
-        op_mask |= FIM_EBPF_OP_ATTR;
+        op_mask |= IM_EBPF_OP_ATTR;
     if (valid & ATTR_SIZE)
-        op_mask |= FIM_EBPF_OP_WRITE;
+        op_mask |= IM_EBPF_OP_WRITE;
     if (!op_mask)
         return 0;
 
@@ -300,7 +300,7 @@ int BPF_PROG(check_inode_setattr, struct dentry *dentry, struct iattr *attr, int
     if (!inode)
         return 0;
 
-    return audit_inode(inode, op_mask, FIM_HOOK_INODE_SETATTR);
+    return audit_inode(inode, op_mask, IM_HOOK_INODE_SETATTR);
 }
 
 char LICENSE[] SEC("license") = "GPL";

@@ -1,10 +1,10 @@
 /*
- * fim_config.c — 설정 파일 파서 (inotify + eBPF 구조)
+ * im_config.c — 설정 파일 파서 (inotify + eBPF 구조)
  *
  * 설정 파일 형식:
  *
  *   daemonize = 0
- *   log_file = /var/log/fim_monitor.log
+ *   log_file = /var/log/im_monitor.log
  *   verbose = 1
  *   ebpf = 1          # eBPF who-data 추적 (kernel 5.8+에서만 실제 활성화)
  *
@@ -15,8 +15,8 @@
  *
  *   # 자체 보호 (변경 시 ALERT)
  *   [protect]
- *   /usr/local/bin/fim_monitor = file
- *   /etc/fim_monitor/fim.conf = file
+ *   /usr/local/bin/agent = file
+ *   /etc/im_monitor/im.conf = file
  *
  * 하위호환: [watch_inotify] 도 [watch] 와 동일하게 처리됨.
  */
@@ -41,11 +41,11 @@ typedef enum {
     SECTION_PROTECT
 } config_section_t;
 
-int fim_config_load(fim_config_t *cfg, const char *path) {
-    memset(cfg, 0, sizeof(fim_config_t));
+int im_config_load(im_config_t *cfg, const char *path) {
+    memset(cfg, 0, sizeof(im_config_t));
 
     /* 기본값 */
-    strncpy(cfg->log_file, FIM_LOG_FILE, sizeof(cfg->log_file) - 1);
+    strncpy(cfg->log_file, IM_LOG_FILE, sizeof(cfg->log_file) - 1);
     cfg->daemonize    = 1;
     cfg->log_to_syslog = 0;
     cfg->verbose       = 0;
@@ -102,9 +102,9 @@ int fim_config_load(fim_config_t *cfg, const char *path) {
             break;
 
         case SECTION_WATCH:
-            if (cfg->watch_count < FIM_MAX_WATCHES) {
-                fim_watch_entry_t *w = &cfg->watches[cfg->watch_count];
-                strncpy(w->path, key, FIM_MAX_PATH - 1);
+            if (cfg->watch_count < IM_MAX_WATCHES) {
+                im_watch_entry_t *w = &cfg->watches[cfg->watch_count];
+                strncpy(w->path, key, IM_MAX_PATH - 1);
                 w->recursive = (strcmp(val, "recursive") == 0) ? 1 : 0;
                 cfg->watch_count++;
             }
@@ -112,8 +112,8 @@ int fim_config_load(fim_config_t *cfg, const char *path) {
 
         case SECTION_PROTECT:
             if (cfg->protect_count < 32) {
-                fim_watch_entry_t *w = &cfg->protect_paths[cfg->protect_count];
-                strncpy(w->path, key, FIM_MAX_PATH - 1);
+                im_watch_entry_t *w = &cfg->protect_paths[cfg->protect_count];
+                strncpy(w->path, key, IM_MAX_PATH - 1);
                 w->recursive = 0;
                 cfg->protect_count++;
             }
@@ -125,9 +125,9 @@ int fim_config_load(fim_config_t *cfg, const char *path) {
     return 0;
 }
 
-void fim_config_dump(fim_config_t *cfg) {
+void im_config_dump(im_config_t *cfg) {
     LOG_INFO_FIM("╔══════════════════════════════════════╗");
-    LOG_INFO_FIM("║          FIM Monitor config          ║");
+    LOG_INFO_FIM("║           IM Monitor config          ║");
     LOG_INFO_FIM("╠══════════════════════════════════════╣");
     LOG_INFO_FIM("║ daemonize : %d", cfg->daemonize);
     LOG_INFO_FIM("║ log_file  : %s", cfg->log_file);

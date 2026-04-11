@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fim_lkm_main.c — 모듈 진입점
+ * im_lkm_main.c — 모듈 진입점
  *
  * initialize:
  *   1. Initialize policy hash table (inode_policy_clear)
- *   2. Register char device (/dev/fim_lkm)
+ *   2. Register char device (/dev/im_lkm)
  *   3. hooking (vfs_write, vfs_unlink, vfs_rename)
  *
  * release:
@@ -20,27 +20,27 @@
 #include <linux/init.h>
 #include <linux/version.h>
 
-#include "fim_lkm_policy.h"
+#include "im_lkm_policy.h"
 
-extern int  fim_chardev_init(void);
-extern void fim_chardev_exit(void);
-extern int  fim_hooks_init(void);
-extern void fim_hooks_exit(void);
-extern void fim_events_flush_cancel(void);
+extern int  im_chardev_init(void);
+extern void im_chardev_exit(void);
+extern int  im_hooks_init(void);
+extern void im_hooks_exit(void);
+extern void im_events_flush_cancel(void);
 
-static int __init fim_lkm_init(void)
+static int __init im_lkm_init(void)
 {
     int ret;
 
-    fim_policy_init();
+    im_policy_init();
 
-    ret = fim_chardev_init();
+    ret = im_chardev_init();
     if (ret)
         return ret;
 
-    ret = fim_hooks_init();
+    ret = im_hooks_init();
     if (ret) {
-        fim_chardev_exit();
+        im_chardev_exit();
         return ret;
     }
 
@@ -51,19 +51,19 @@ static int __init fim_lkm_init(void)
     return 0;
 }
 
-static void __exit fim_lkm_exit(void)
+static void __exit im_lkm_exit(void)
 {
-    fim_hooks_exit();           /* No enqueue afterwards */
-    fim_events_flush_cancel();  /* Cancel pending workqueue work */
-    fim_chardev_exit();
+    im_hooks_exit();           /* No enqueue afterwards */
+    im_events_flush_cancel();  /* Cancel pending workqueue work */
+    im_chardev_exit();
     inode_policy_clear();
     pr_info("unloaded\n");
 }
 
-module_init(fim_lkm_init);
-module_exit(fim_lkm_exit);
+module_init(im_lkm_init);
+module_exit(im_lkm_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("fim_monitor");
-MODULE_DESCRIPTION("FIM file blocking LKM — kprobe + inode policy");
+MODULE_AUTHOR("im_monitor");
+MODULE_DESCRIPTION("IM file blocking LKM — kprobe + inode policy");
 MODULE_VERSION("1.0");

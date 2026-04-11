@@ -113,25 +113,25 @@ static inline void read_bytes(const uint8_t **p, uint8_t *dst, size_t len)
     *p += len;
 }
 
-int fim_frame_header_encode(const fim_frame_header_t *h, uint8_t *buf)
+int im_frame_header_encode(const im_frame_header_t *h, uint8_t *buf)
 {
     uint8_t *p = buf;
     write_u32(&p, h->length);
     write_u8(&p, h->type);
     write_u32(&p, h->seq_num);
-    return FIM_FRAME_HEADER_SIZE;
+    return IM_FRAME_HEADER_SIZE;
 }
 
-int fim_frame_header_decode(const uint8_t *buf, fim_frame_header_t *h)
+int im_frame_header_decode(const uint8_t *buf, im_frame_header_t *h)
 {
     const uint8_t *p = buf;
     h->length = read_u32(&p);
     h->type = read_u8(&p);
     h->seq_num = read_u32(&p);
-    return FIM_FRAME_HEADER_SIZE;
+    return IM_FRAME_HEADER_SIZE;
 }
 
-int fim_register_encode(const fim_msg_register_t *msg, uint8_t *buf, size_t buf_size)
+int im_register_encode(const im_msg_register_t *msg, uint8_t *buf, size_t buf_size)
 {
     size_t need = 2 + msg->hostname_len + 4 + 1 + 2 + msg->os_len;
     if (need > buf_size) return -1;
@@ -144,7 +144,7 @@ int fim_register_encode(const fim_msg_register_t *msg, uint8_t *buf, size_t buf_
     return (int)(p - buf);
 }
 
-int fim_register_decode(const uint8_t *buf, size_t len, fim_msg_register_t *msg)
+int im_register_decode(const uint8_t *buf, size_t len, im_msg_register_t *msg)
 {
     const uint8_t *p = buf;
     const uint8_t *end = buf + len;
@@ -153,20 +153,20 @@ int fim_register_decode(const uint8_t *buf, size_t len, fim_msg_register_t *msg)
     if (read_str(&p, end, &msg->hostname, &msg->hostname_len) < 0)
         return -1;
     if ((size_t)(end - p) < 5) {
-        fim_register_free(msg);
+        im_register_free(msg);
         return -1;
     }
 
     msg->ip = read_u32(&p);
     msg->monitor_type = read_u8(&p);
     if (read_str(&p, end, &msg->os, &msg->os_len) < 0) {
-        fim_register_free(msg);
+        im_register_free(msg);
         return -1;
     }
     return (int)(p - buf);
 }
 
-void fim_register_free(fim_msg_register_t *msg)
+void im_register_free(im_msg_register_t *msg)
 {
     free(msg->hostname);
     free(msg->os);
@@ -174,7 +174,7 @@ void fim_register_free(fim_msg_register_t *msg)
     msg->os = NULL;
 }
 
-int fim_heartbeat_encode(const fim_msg_heartbeat_t *msg, uint8_t *buf, size_t buf_size)
+int im_heartbeat_encode(const im_msg_heartbeat_t *msg, uint8_t *buf, size_t buf_size)
 {
     if (buf_size < 13) return -1;
 
@@ -185,7 +185,7 @@ int fim_heartbeat_encode(const fim_msg_heartbeat_t *msg, uint8_t *buf, size_t bu
     return 13;
 }
 
-int fim_heartbeat_decode(const uint8_t *buf, size_t len, fim_msg_heartbeat_t *msg)
+int im_heartbeat_decode(const uint8_t *buf, size_t len, im_msg_heartbeat_t *msg)
 {
     if (len < 13) return -1;
 
@@ -196,7 +196,7 @@ int fim_heartbeat_decode(const uint8_t *buf, size_t len, fim_msg_heartbeat_t *ms
     return 13;
 }
 
-int fim_file_event_encode(const fim_msg_file_event_t *msg, uint8_t *buf, size_t buf_size)
+int im_file_event_encode(const im_msg_file_event_t *msg, uint8_t *buf, size_t buf_size)
 {
     size_t need = 8 + 1
         + 2 + msg->file_path_len
@@ -216,7 +216,7 @@ int fim_file_event_encode(const fim_msg_file_event_t *msg, uint8_t *buf, size_t 
     return (int)(p - buf);
 }
 
-int fim_file_event_decode(const uint8_t *buf, size_t len, fim_msg_file_event_t *msg)
+int im_file_event_decode(const uint8_t *buf, size_t len, im_msg_file_event_t *msg)
 {
     if (len < 24) return -1;
 
@@ -227,16 +227,16 @@ int fim_file_event_decode(const uint8_t *buf, size_t len, fim_msg_file_event_t *
     msg->agent_id = read_u64(&p);
     msg->event_type = read_u8(&p);
     if (read_str(&p, end, &msg->file_path, &msg->file_path_len) < 0) {
-        fim_file_event_free(msg);
+        im_file_event_free(msg);
         return -1;
     }
     if (read_str(&p, end, &msg->file_name, &msg->file_name_len) < 0) {
-        fim_file_event_free(msg);
+        im_file_event_free(msg);
         return -1;
     }
 
     if ((size_t)(end - p) < 11) {
-        fim_file_event_free(msg);
+        im_file_event_free(msg);
         return -1;
     }
     msg->file_permission = read_u16(&p);
@@ -246,7 +246,7 @@ int fim_file_event_decode(const uint8_t *buf, size_t len, fim_msg_file_event_t *
     return (int)(p - buf);
 }
 
-void fim_file_event_free(fim_msg_file_event_t *msg)
+void im_file_event_free(im_msg_file_event_t *msg)
 {
     free(msg->file_path);
     free(msg->file_name);

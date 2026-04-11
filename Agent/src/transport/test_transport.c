@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
     /* ── Step 1: TLS 컨텍스트 초기화 ────────────── */
     printf("[1] TLS 컨텍스트 초기화...\n");
-    fim_tls_ctx_t tls_ctx;
+    im_tls_ctx_t tls_ctx;
     if (tls_context_init(&tls_ctx, ca_crt, agent_crt, agent_key) < 0) {
         fprintf(stderr, "❌ TLS 컨텍스트 초기화 실패\n");
         return 1;
@@ -105,16 +105,16 @@ int main(int argc, char *argv[])
 
     /* ── Step 2: TCP + mTLS 연결 ─────────────────── */
     printf("[2] 서버 연결 중... (%s:%d)\n", server_host, server_port);
-    fim_tcp_client_t client;
-    if (fim_tcp_init(&client, &tls_ctx, server_host, (uint16_t)server_port) < 0) {
+    im_tcp_client_t client;
+    if (im_tcp_init(&client, &tls_ctx, server_host, (uint16_t)server_port) < 0) {
         fprintf(stderr, "TCP 클라이언트 초기화 실패\n");
         tls_context_free(&tls_ctx);
         return 1;
     }
 
-    if (fim_tcp_connect(&client) < 0) {
+    if (im_tcp_connect(&client) < 0) {
         fprintf(stderr, "서버 연결 실패 (%s:%d)\n", server_host, server_port);
-        fim_tcp_free(&client);
+        im_tcp_free(&client);
         tls_context_free(&tls_ctx);
         return 1;
     }
@@ -128,10 +128,10 @@ int main(int argc, char *argv[])
     get_local_ip(server_host, server_port, local_ip, sizeof(local_ip));
 
     char agent_id[128] = {0};
-    if (fim_tcp_register(&client, hostname, local_ip, FIM_MON_EBPF,
+    if (im_tcp_register(&client, hostname, local_ip, IM_MON_EBPF,
                          "Linux", agent_id, sizeof(agent_id)) < 0) {
         fprintf(stderr, "REGISTER 실패\n");
-        fim_tcp_free(&client);
+        im_tcp_free(&client);
         tls_context_free(&tls_ctx);
         return 1;
     }
@@ -145,17 +145,17 @@ int main(int argc, char *argv[])
         "/tmp/testfile.txt",
         "/home/user/documents/secret.key"
     };
-    fim_event_type_t test_types[] = {
-        FIM_EVENT_MODIFY,
-        FIM_EVENT_CREATE,
-        FIM_EVENT_DELETE
+    im_event_type_t test_types[] = {
+        IM_EVENT_MODIFY,
+        IM_EVENT_CREATE,
+        IM_EVENT_DELETE
     };
 
     for (int i = 0; i < 3; i++) {
-        fim_event_t ev;
+        im_event_t ev;
         memset(&ev, 0, sizeof(ev));
         ev.type      = test_types[i];
-        ev.source    = FIM_SOURCE_EBPF;
+        ev.source    = IM_SOURCE_EBPF;
         ev.timestamp = time(NULL);
         ev.pid       = 0;
 
@@ -165,9 +165,9 @@ int main(int argc, char *argv[])
         strncpy(ev.filename, slash ? slash + 1 : test_paths[i],
                 sizeof(ev.filename) - 1);
 
-        if (fim_tcp_send_event(&client, &ev) == 0) {
+        if (im_tcp_send_event(&client, &ev) == 0) {
             printf("\t[FILE_EVENT %d] %s → %s\n",
-                   i + 1, fim_event_type_str(ev.type), ev.path);
+                   i + 1, im_event_type_str(ev.type), ev.path);
         } else {
             printf("\t\t[FILE_EVENT %d] 전송 실패\n", i + 1);
         }
@@ -177,16 +177,16 @@ int main(int argc, char *argv[])
     /* ── Step 5: HEARTBEAT 3회 ───────────────────── */
     printf("[5] HEARTBEAT 전송 (3회, 5초 간격)...\n");
     for (int i = 0; i < 3; i++) {
-        fim_msg_heartbeat_t hb = {
+        im_msg_heartbeat_t hb = {
             .agent_id = client.agent_id,
-            .status = FIM_STATUS_HEALTHY,
+            .status = IM_STATUS_HEALTHY,
             .timestamp = (uint32_t)time(NULL),
         };
         uint8_t buf[13];
-        int len = fim_heartbeat_encode(&hb, buf, sizeof(buf));
+        int len = im_heartbeat_encode(&hb, buf, sizeof(buf));
 
         if (len >= 0 &&
-            fim_tcp_send_frame(&client, FIM_MSG_HEARTBEAT, buf, (uint32_t)len) == 0) {
+            im_tcp_send_frame(&client, IM_MSG_HEARTBEAT, buf, (uint32_t)len) == 0) {
             printf("\tHEARTBEAT %d 전송\n", i + 1);
         } else {
             printf("\tHEARTBEAT %d 전송 실패\n", i + 1);
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 
     /* ── Step 6: 정리 ────────────────────────────── */
     printf("[6] 연결 종료...\n");
-    fim_tcp_free(&client);
+    im_tcp_free(&client);
     tls_context_free(&tls_ctx);
     printf("\t테스트 완료\n");
     return 0;

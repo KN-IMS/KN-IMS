@@ -1,27 +1,27 @@
-#ifndef FIM_LKM_POLICY_H
-#define FIM_LKM_POLICY_H
+#ifndef IM_LKM_POLICY_H
+#define IM_LKM_POLICY_H
 
 #include <linux/hashtable.h>
 #include <linux/rwlock.h>
-#include "fim_lkm_common.h"
+#include "im_lkm_common.h"
 
-#define FIM_POLICY_BITS  8   /* 2^8 = 256 버킷 */
-#define FIM_MAX_PATH     256
+#define IM_POLICY_BITS  8   /* 2^8 = 256 버킷 */
+#define IM_MAX_PATH     256
 
-struct fim_policy_entry {
+struct im_policy_entry {
     uint64_t  dev;
     uint64_t  ino;
     uint32_t  mask;
     uint32_t  block;
-    char      path[FIM_MAX_PATH];
+    char      path[IM_MAX_PATH];
     struct hlist_node node;
 };
 
-/* rwlock — fim_lkm_events.c에서 read_lock으로 접근 */
-extern rwlock_t fim_policy_lock;
+/* rwlock — im_lkm_events.c에서 read_lock으로 접근 */
+extern rwlock_t im_policy_lock;
 
 /* 초기화 — module_init에서 호출 (hash_init은 정의 파일 내부에서만 가능) */
-void fim_policy_init(void);
+void im_policy_init(void);
 
 int  inode_policy_add(uint64_t dev, uint64_t ino,
                       uint32_t mask, uint32_t block,
@@ -36,4 +36,4 @@ int  inode_policy_lookup(uint64_t dev, uint64_t ino,
 /* 경로 조회 (이벤트 emit 시) — read_lock 내부에서 사용 */
 const char *inode_policy_path(uint64_t dev, uint64_t ino);
 
-#endif /* FIM_LKM_POLICY_H */
+#endif /* IM_LKM_POLICY_H */

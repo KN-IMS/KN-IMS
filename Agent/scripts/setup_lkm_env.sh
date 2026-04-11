@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup_lkm_env.sh — fim_lkm.ko (LKM) 빌드 환경 세팅
+# setup_lkm_env.sh — im_lkm.ko (LKM) 빌드 환경 세팅
 #
 # LKM 전용 (sys_call_table 후킹, kernel 3.10+)
 # eBPF 의존성은 scripts/setup_ebpf_deps.sh 참조
@@ -233,34 +233,34 @@ build_lkm() {
     make -C "$LKM_DIR" clean 2>/dev/null || true
     make -C "$LKM_DIR" -j$(nproc)
 
-    if [[ -f "$LKM_DIR/fim_lkm.ko" ]]; then
-        ok "LKM 빌드 완료: $LKM_DIR/fim_lkm.ko"
-        modinfo "$LKM_DIR/fim_lkm.ko" | grep -E "^(filename|version|license|description)"
+    if [[ -f "$LKM_DIR/im_lkm.ko" ]]; then
+        ok "LKM 빌드 완료: $LKM_DIR/im_lkm.ko"
+        modinfo "$LKM_DIR/im_lkm.ko" | grep -E "^(filename|version|license|description)"
     else
-        error "fim_lkm.ko 생성 실패"
+        error "im_lkm.ko 생성 실패"
     fi
 }
 
-# ── fim_agent 빌드 ─────────────────────────────────────────
+# ── agent 빌드 ─────────────────────────────────────────────
 build_agent() {
-    info "fim_agent 빌드 시작: $PROJECT_DIR"
+    info "agent 빌드 시작: $PROJECT_DIR"
     mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
 
     cmake .. -DCMAKE_BUILD_TYPE=Release
     make -j$(nproc)
 
-    if [[ -f "$BUILD_DIR/fim_agent" ]]; then
-        ok "fim_agent 빌드 완료: $BUILD_DIR/fim_agent"
+    if [[ -f "$BUILD_DIR/agent" ]]; then
+        ok "agent 빌드 완료: $BUILD_DIR/agent"
     else
-        error "fim_agent 빌드 실패"
+        error "agent 빌드 실패"
     fi
 }
 
 # ── 설정 파일 초기화 ───────────────────────────────────────
 setup_config() {
-    local conf_dir="/etc/fim_monitor"
-    local conf_file="$conf_dir/fim.conf"
+    local conf_dir="/etc/im_monitor"
+    local conf_file="$conf_dir/im.conf"
 
     mkdir -p "$conf_dir"
 
@@ -275,7 +275,7 @@ setup_config() {
     for candidate in \
         "$PROJECT_DIR/configs/test.conf" \
         "$PROJECT_DIR/configs/agent.yaml" \
-        "$PROJECT_DIR/configs/fim.conf"
+        "$PROJECT_DIR/configs/im.conf"
     do
         if [[ -f "$candidate" ]]; then
             src_conf="$candidate"
@@ -292,16 +292,16 @@ setup_config() {
         cat > "$conf_file" << 'EOF'
 [general]
 daemonize = false
-log_file  = /var/log/fim_monitor.log
+log_file  = /var/log/im_monitor.log
 verbose   = true
 
 [watch]
-path      = /tmp/fim_test
+path      = /tmp/im_test
 recursive = true
 EOF
-        mkdir -p /tmp/fim_test
-        echo "test" > /tmp/fim_test/sample.txt
-        ok "기본 설정 생성: $conf_file (감시 경로: /tmp/fim_test)"
+        mkdir -p /tmp/im_test
+        echo "test" > /tmp/im_test/sample.txt
+        ok "기본 설정 생성: $conf_file (감시 경로: /tmp/im_test)"
     fi
 }
 
@@ -310,20 +310,20 @@ smoke_test() {
     info "빠른 동작 확인..."
 
     # LKM 로드 테스트
-    if [[ -f "$LKM_DIR/fim_lkm.ko" ]]; then
-        if lsmod | grep -q fim_lkm; then
-            warn "fim_lkm 이미 로드됨 — 언로드 후 재로드"
-            rmmod fim_lkm 2>/dev/null || true
+    if [[ -f "$LKM_DIR/im_lkm.ko" ]]; then
+        if lsmod | grep -q im_lkm; then
+            warn "im_lkm 이미 로드됨 — 언로드 후 재로드"
+            rmmod im_lkm 2>/dev/null || true
             sleep 1
         fi
-        if insmod "$LKM_DIR/fim_lkm.ko"; then
-            ok "fim_lkm.ko 로드 성공"
+        if insmod "$LKM_DIR/im_lkm.ko"; then
+            ok "im_lkm.ko 로드 성공"
             sleep 1
             dmesg | tail -5
-            rmmod fim_lkm
-            ok "fim_lkm.ko 언로드 성공 (smoke test 완료)"
+            rmmod im_lkm
+            ok "im_lkm.ko 언로드 성공 (smoke test 완료)"
         else
-            warn "fim_lkm.ko 로드 실패 — dmesg 확인 필요"
+            warn "im_lkm.ko 로드 실패 — dmesg 확인 필요"
             dmesg | tail -10
         fi
     fi
@@ -337,25 +337,25 @@ print_next_steps() {
     echo -e "${GREEN}══════════════════════════════════════════════${NC}"
     echo ""
     echo "  # 1. LKM 로드"
-    echo "  sudo insmod $LKM_DIR/fim_lkm.ko"
+    echo "  sudo insmod $LKM_DIR/im_lkm.ko"
     echo "  dmesg | tail -5"
     echo ""
-    echo "  # 2. fim_agent 실행 (포그라운드 + 상세 로그)"
-    echo "  sudo $BUILD_DIR/fim_agent -f -v -c /etc/fim_monitor/fim.conf -m lock"
+    echo "  # 2. agent 실행 (포그라운드 + 상세 로그)"
+    echo "  sudo $BUILD_DIR/agent -f -v -c /etc/im_monitor/im.conf -m lock"
     echo ""
     echo "  # 3. 차단 테스트 (별도 터미널)"
-    echo "  echo 'hack' > /tmp/fim_test/sample.txt   # → Permission denied"
-    echo "  rm /tmp/fim_test/sample.txt              # → Operation not permitted"
+    echo "  echo 'hack' > /tmp/im_test/sample.txt   # → Permission denied"
+    echo "  rm /tmp/im_test/sample.txt              # → Operation not permitted"
     echo ""
     echo "  # 4. 종료 후 LKM 언로드"
-    echo "  sudo rmmod fim_lkm"
+    echo "  sudo rmmod im_lkm"
     echo ""
 }
 
 # ── 메인 ───────────────────────────────────────────────────
 main() {
     echo ""
-    info "fim_monitor VM 세팅 시작"
+    info "im_monitor VM 세팅 시작"
     echo ""
 
     detect_os

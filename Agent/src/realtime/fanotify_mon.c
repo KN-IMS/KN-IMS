@@ -26,24 +26,24 @@
 typedef struct {
     int  fd;
     int  watch_count;
-    char watch_paths[FIM_MAX_WATCHES][FIM_MAX_PATH];
+    char watch_paths[IM_MAX_WATCHES][IM_MAX_PATH];
 
     /* 자체 보호 경로 */
     int  protect_count;
-    char protect_paths[32][FIM_MAX_PATH];
+    char protect_paths[32][IM_MAX_PATH];
 } fanotify_priv_t;
 
 /* ── 유틸리티 ──────────────────────────────────── */
 
-static fim_event_type_t fanotify_mask_to_fim(uint64_t mask) {
-    if (mask & FAN_CREATE)       return FIM_EVENT_CREATE;
-    if (mask & FAN_MODIFY)       return FIM_EVENT_MODIFY;
-    if (mask & FAN_DELETE)        return FIM_EVENT_DELETE;
-    if (mask & FAN_ATTRIB)        return FIM_EVENT_ATTRIB;
-    if (mask & (FAN_MOVED_FROM | FAN_MOVED_TO)) return FIM_EVENT_MOVE;
-    if (mask & FAN_ACCESS)        return FIM_EVENT_ACCESS;
-    if (mask & FAN_CLOSE_WRITE)   return FIM_EVENT_MODIFY;
-    return FIM_EVENT_UNKNOWN;
+static im_event_type_t fanotify_mask_to_fim(uint64_t mask) {
+    if (mask & FAN_CREATE)       return IM_EVENT_CREATE;
+    if (mask & FAN_MODIFY)       return IM_EVENT_MODIFY;
+    if (mask & FAN_DELETE)        return IM_EVENT_DELETE;
+    if (mask & FAN_ATTRIB)        return IM_EVENT_ATTRIB;
+    if (mask & (FAN_MOVED_FROM | FAN_MOVED_TO)) return IM_EVENT_MOVE;
+    if (mask & FAN_ACCESS)        return IM_EVENT_ACCESS;
+    if (mask & FAN_CLOSE_WRITE)   return IM_EVENT_MODIFY;
+    return IM_EVENT_UNKNOWN;
 }
 
 static int get_path_from_fd(int fd, char *buf, size_t buflen) {
@@ -75,7 +75,7 @@ static int get_path_from_fid(struct fanotify_event_info_fid *fid,
         return -1;
     }
 
-    char dirpath[FIM_MAX_PATH];
+    char dirpath[IM_MAX_PATH];
     if (get_path_from_fd(dirfd, dirpath, sizeof(dirpath)) < 0) {
         close(dirfd);
         return -1;
@@ -136,8 +136,8 @@ static void get_process_name(pid_t pid, char *buf, size_t buflen) {
 
 /* ── 백엔드 인터페이스 ─────────────────────────── */
 
-static int fanotify_init_be(fim_backend_t *self, fim_config_t *cfg,
-                            fim_event_queue_t *queue) {
+static int fanotify_init_be(im_backend_t *self, im_config_t *cfg,
+                            im_event_queue_t *queue) {
     fanotify_priv_t *priv = calloc(1, sizeof(fanotify_priv_t));
     if (!priv) return -1;
 
@@ -168,7 +168,7 @@ init_done:
     priv->protect_count = cfg->protect_count;
     for (int i = 0; i < cfg->protect_count && i < 32; i++) {
         strncpy(priv->protect_paths[i], cfg->protect_paths[i].path,
-                FIM_MAX_PATH - 1);
+                IM_MAX_PATH - 1);
     }
 
     self->priv  = priv;
@@ -176,12 +176,12 @@ init_done:
     return 0;
 }
 
-static int fanotify_add_watch_be(fim_backend_t *self, const char *path,
+static int fanotify_add_watch_be(im_backend_t *self, const char *path,
                                  int recursive) {
     (void)recursive;  /* fanotify는 마운트 전체 감시 */
     fanotify_priv_t *priv = (fanotify_priv_t *)self->priv;
 
-    if (priv->watch_count >= FIM_MAX_WATCHES) return -1;
+    if (priv->watch_count >= IM_MAX_WATCHES) return -1;
 
     uint64_t mask = FAN_MODIFY | FAN_CLOSE_WRITE | FAN_ACCESS;
 #ifdef FAN_CREATE
@@ -204,14 +204,14 @@ static int fanotify_add_watch_be(fim_backend_t *self, const char *path,
         return -1;
     }
 
-    strncpy(priv->watch_paths[priv->watch_count], path, FIM_MAX_PATH - 1);
+    strncpy(priv->watch_paths[priv->watch_count], path, IM_MAX_PATH - 1);
     priv->watch_count++;
 
     LOG_INFO_FIM("[fanotify] 상시 감시 등록: %s", path);
     return 0;
 }
 
-static int fanotify_remove_watch_be(fim_backend_t *self, const char *path) {
+static int fanotify_remove_watch_be(im_backend_t *self, const char *path) {
     fanotify_priv_t *priv = (fanotify_priv_t *)self->priv;
 
     uint64_t mask = FAN_MODIFY | FAN_CLOSE_WRITE | FAN_ACCESS;
@@ -227,7 +227,7 @@ static int fanotify_remove_watch_be(fim_backend_t *self, const char *path) {
     for (int i = 0; i < priv->watch_count; i++) {
         if (strcmp(priv->watch_paths[i], path) == 0) {
             memmove(&priv->watch_paths[i], &priv->watch_paths[i+1],
-                    (priv->watch_count - i - 1) * FIM_MAX_PATH);
+                    (priv->watch_count - i - 1) * IM_MAX_PATH);
             priv->watch_count--;
             break;
         }
@@ -237,7 +237,7 @@ static int fanotify_remove_watch_be(fim_backend_t *self, const char *path) {
     return 0;
 }
 
-static int fanotify_poll_events_be(fim_backend_t *self) {
+static int fanotify_poll_events_be(im_backend_t *self) {
     fanotify_priv_t *priv = (fanotify_priv_t *)self->priv;
 
     fd_set fds;
@@ -259,7 +259,7 @@ static int fanotify_poll_events_be(fim_backend_t *self) {
     while (FAN_EVENT_OK(meta, len)) {
         if (meta->vers != FANOTIFY_METADATA_VERSION) break;
 
-        char filepath[FIM_MAX_PATH] = {0};
+        char filepath[IM_MAX_PATH] = {0};
         int got_path = 0;
 
         if (meta->fd >= 0) {
@@ -306,31 +306,31 @@ static int fanotify_poll_events_be(fim_backend_t *self) {
                                         FAN_MOVED_FROM | FAN_MOVED_TO))) {
             /* 어느 watch 경로 하위인지는 알 수 없으므로 "?" 표기 */
             for (int wi = 0; wi < priv->watch_count; wi++) {
-                fim_event_t fe;
+                im_event_t fe;
                 memset(&fe, 0, sizeof(fe));
                 fe.type      = fanotify_mask_to_fim(meta->mask);
-                fe.source    = FIM_SOURCE_FANOTIFY;
+                fe.source    = IM_SOURCE_FANOTIFY;
                 fe.timestamp = time(NULL);
                 fe.pid       = meta->pid;
-                snprintf(fe.path, FIM_MAX_PATH, "%s<경로미상>",
+                snprintf(fe.path, IM_MAX_PATH, "%s<경로미상>",
                          priv->watch_paths[wi]);
                 strncpy(fe.filename, "?", sizeof(fe.filename) - 1);
-                fim_queue_push(self->queue, &fe);
+                im_queue_push(self->queue, &fe);
             }
             meta = FAN_EVENT_NEXT(meta, len);
             continue;
         }
 
         if (got_path && is_watched_path(priv, filepath)) {
-            fim_event_t fe;
+            im_event_t fe;
             memset(&fe, 0, sizeof(fe));
             fe.type      = fanotify_mask_to_fim(meta->mask);
-            fe.source    = FIM_SOURCE_FANOTIFY;
+            fe.source    = IM_SOURCE_FANOTIFY;
             fe.timestamp = time(NULL);
             fe.pid       = meta->pid;
 
-            strncpy(fe.path, filepath, FIM_MAX_PATH - 1);
-            fe.path[FIM_MAX_PATH - 1] = '\0';
+            strncpy(fe.path, filepath, IM_MAX_PATH - 1);
+            fe.path[IM_MAX_PATH - 1] = '\0';
             const char *slash = strrchr(filepath, '/');
             const char *basename = slash ? slash + 1 : filepath;
             if (meta->mask & FAN_ONDIR) {
@@ -346,11 +346,11 @@ static int fanotify_poll_events_be(fim_backend_t *self) {
                 get_process_name(meta->pid, pname, sizeof(pname));
                 LOG_ALERT_FIM("*** 자체 보호 위반! %s %s "
                               "(pid=%d, proc=%s) ***",
-                              filepath, fim_event_type_str(fe.type),
+                              filepath, im_event_type_str(fe.type),
                               meta->pid, pname);
             }
 
-            fim_queue_push(self->queue, &fe);
+            im_queue_push(self->queue, &fe);
             count++;
         }
 
@@ -360,7 +360,7 @@ static int fanotify_poll_events_be(fim_backend_t *self) {
     return count;
 }
 
-static void fanotify_cleanup_be(fim_backend_t *self) {
+static void fanotify_cleanup_be(im_backend_t *self) {
     fanotify_priv_t *priv = (fanotify_priv_t *)self->priv;
     if (!priv) return;
 
@@ -370,8 +370,8 @@ static void fanotify_cleanup_be(fim_backend_t *self) {
     LOG_INFO_FIM("[fanotify] 정리 완료");
 }
 
-fim_backend_t *fim_fanotify_create(void) {
-    fim_backend_t *be = calloc(1, sizeof(fim_backend_t));
+im_backend_t *im_fanotify_create(void) {
+    im_backend_t *be = calloc(1, sizeof(im_backend_t));
     if (!be) return NULL;
 
     be->name         = "fanotify";

@@ -2,8 +2,8 @@
  * grpc_client.c — 서버로 이벤트 전송
  *
  * TODO:
- *   - fim-proto 레포의 .proto 정의로 생성된 stub 사용
- *   - fim_event_t → protobuf FimEvent 메시지 직렬화
+ *   - im-proto 레포의 .proto 정의로 생성된 stub 사용
+ *   - im_event_t → protobuf FimEvent 메시지 직렬화
  *   - gRPC 단방향 스트리밍(ReportEvent RPC)으로 서버에 전송
  *   - 연결 실패 시 재시도 / 버퍼링 처리
  */

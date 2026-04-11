@@ -32,7 +32,9 @@ func NewTLSConfig(caCert, serverCert, serverKey string) (*tls.Config, error) {
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    caPool,
 		ClientAuth:   tls.RequireAndVerifyClientCert, // mTLS -> 에이전트 인증서 필수
-		MinVersion:   tls.VersionTLS13,               // TLS 1.3 최소 버전 강제
+		// 구형 OpenSSL(예: CentOS 7 / OpenSSL 1.0.x) 에이전트도 붙을 수 있게
+		// 최소 버전은 TLS 1.2로 두고, 최신 클라이언트는 TLS 1.3으로 협상한다.
+		MinVersion: tls.VersionTLS12,
 	}, nil
 }
 

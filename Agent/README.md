@@ -1,4 +1,4 @@
-# KGU-FIMS — File Integrity Monitor Agent
+# KN-IMS — Integrity Monitor Agent
 
 파일 무결성 모니터링 에이전트. 커널 버전에 따라 두 가지 백엔드를 지원합니다.
 
@@ -47,10 +47,10 @@ cd src/lkm && make
 mkdir build && cd build && cmake .. && make -j$(nproc)
 
 # 4. LKM 로드
-sudo insmod src/lkm/fim_lkm.ko
+sudo insmod src/lkm/im_lkm.ko
 
 # 5. 에이전트 실행
-sudo ./build/fim_agent -f -v -c configs/test.conf -m lock
+sudo ./build/agent -f -v -c configs/test.conf -m lock
 ```
 
 ### eBPF 모드 (kernel 5.8+)
@@ -73,7 +73,7 @@ chmod +x cmake.sh
 sudo sh cmake.sh --prefix=/usr/local --skip-license 
 
 # 4. 에이전트 실행
-sudo ./build/fim_agent -f -v -c configs/test.conf -m lock
+sudo ./build/agent -f -v -c configs/test.conf -m lock
 ```
 
 ---
@@ -93,7 +93,7 @@ sudo ./build/fim_agent -f -v -c configs/test.conf -m lock
 [파일 접근 시도]
       │
       ├─ LKM:  sys_call_table 후킹 → inode 정책 조회 → DENY/AUDIT
-      │        → /dev/fim_lkm (chardev) → lkm_event_thread
+      │        → /dev/im_lkm (chardev) → lkm_event_thread
       │
       └─ eBPF: LSM 훅 → BPF 맵 정책 조회 → DENY/AUDIT
                → Ring Buffer → ebpf_poll_thread
@@ -112,12 +112,12 @@ sudo ./build/fim_agent -f -v -c configs/test.conf -m lock
 
 ## 설정 파일
 
-`/etc/fim_monitor/fim.conf` (또는 `-c` 플래그로 지정 단, 소유자 root 필수)
+`/etc/im_monitor/im.conf` (또는 `-c` 플래그로 지정 단, 소유자 root 필수)
 
 ```ini
 [general]
 daemonize = false
-log_file  = /var/log/fim_monitor.log
+log_file  = /var/log/im_monitor.log
 verbose   = true
 
 [ebpf]
