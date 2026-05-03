@@ -8,6 +8,87 @@
     <script>
         tailwind.config = { darkMode: 'class' };
     </script>
+    <style>
+        @page {
+            size: A4;
+            margin: 18mm 16mm;
+        }
+        @media print {
+            html, body {
+                background: white !important;
+                color: #111827 !important;
+                font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            }
+            body * { visibility: hidden; }
+            #report-modal, #report-modal * { visibility: visible; }
+
+            #report-modal {
+                position: absolute !important;
+                top: 0; left: 0;
+                width: 100% !important;
+                height: auto !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: white !important;
+                display: block !important;
+            }
+            #report-modal > div {
+                max-width: 100% !important;
+                max-height: none !important;
+                width: 100% !important;
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                background: white !important;
+            }
+
+            /* Force readable monochrome with selective color preservation */
+            #report-modal,
+            #report-modal *:not(#report-modal-severity):not(.report-num):not(.report-code) {
+                color: #111827 !important;
+                background: transparent !important;
+            }
+            #report-modal-body {
+                overflow: visible !important;
+                max-height: none !important;
+                background: white !important;
+                padding: 0 !important;
+            }
+            #report-modal-body > section {
+                page-break-inside: avoid;
+                margin-bottom: 22px !important;
+            }
+
+            /* Preserve severity badge color */
+            #report-modal-severity {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                border: 1px solid currentColor !important;
+                background: transparent !important;
+            }
+
+            /* Section number badge — print as outlined box, not colored fill */
+            .report-num {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                border: 1px solid #1f2937 !important;
+                background: transparent !important;
+                color: #1f2937 !important;
+            }
+
+            .report-code {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color: #1d4ed8 !important;
+            }
+
+            .report-divider {
+                border-color: #d1d5db !important;
+            }
+
+            .no-print { display: none !important; }
+        }
+    </style>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
 
@@ -94,6 +175,7 @@
                             <th class="px-6 py-3">Agent</th>
                             <th class="px-6 py-3">Event</th>
                             <th class="px-6 py-3">Action</th>
+                            <th class="px-6 py-3">Report</th>
                         </tr>
                     </thead>
                     <tbody id="events-tbody" class="text-gray-900 dark:text-gray-200">
@@ -110,6 +192,52 @@
         </section>
 
     </main>
+
+    <!-- Report Modal -->
+    <div id="report-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg max-w-5xl w-full max-h-[92vh] flex flex-col border border-gray-200 dark:border-gray-700 shadow-2xl">
+
+            <!-- Header -->
+            <div class="px-8 py-6 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                        <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400 mb-1">IG Incident Report</div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">무결성 침해 보고서</h3>
+                    </div>
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                        <span id="report-modal-severity" class="px-3 py-1 rounded-full text-xs font-semibold"></span>
+                        <button id="report-modal-close" class="no-print text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-2xl leading-none">&times;</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400 mb-0.5">대상 자원</div>
+                        <div id="report-modal-path" class="text-gray-900 dark:text-gray-100 font-mono text-[11px] truncate"></div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400 mb-0.5">호스트</div>
+                        <div id="report-modal-host" class="text-gray-900 dark:text-gray-100"></div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400 mb-0.5">발생 시각</div>
+                        <div id="report-modal-time" class="text-gray-900 dark:text-gray-100"></div>
+                    </div>
+                    <div>
+                        <div class="text-gray-500 dark:text-gray-400 mb-0.5">보고서 생성</div>
+                        <div id="report-modal-generated" class="text-gray-900 dark:text-gray-100"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div id="report-modal-body" class="px-8 py-6 overflow-y-auto space-y-8 bg-gray-50/30 dark:bg-gray-900/20"></div>
+
+            <!-- Footer -->
+            <div class="no-print px-8 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end bg-white dark:bg-gray-800 rounded-b-lg">
+                <button id="report-print" class="text-sm px-4 py-2 rounded-md font-medium bg-blue-600 text-white hover:bg-blue-700 shadow-sm">PDF 저장</button>
+            </div>
+        </div>
+    </div>
 
     <script src="js/api.js"></script>
     <script src="js/ui.js"></script>

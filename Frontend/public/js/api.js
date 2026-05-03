@@ -5,23 +5,365 @@ const MOCK_AGENTS = [
 ];
 
 const MOCK_EVENTS = [
-    { time: "2026-03-24 14:23:10", agent: "PC_1", event: "/etc/myapp/config.yaml MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/myapp/config.yaml" },
-    { time: "2026-03-24 14:25:03", agent: "PC_1", event: "/usr/local/bin/my.service MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/local/bin/my.service" },
-    { time: "2026-03-24 14:26:11", agent: "PC_1", event: "/var/log/myapp.log DELETED", type: "DELETED", action: "BLOCKED", path: "/var/log/myapp.log" },
-    { time: "2026-03-24 14:32:45", agent: "PC_3", event: "/etc/nginx/nginx.conf MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/nginx/nginx.conf" },
-    { time: "2026-03-24 14:35:22", agent: "PC_1", event: "/opt/app/bin/worker MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/opt/app/bin/worker" },
-    { time: "2026-03-24 14:38:07", agent: "PC_3", event: "/var/log/syslog DELETED", type: "DELETED", action: "BLOCKED", path: "/var/log/syslog" },
-    { time: "2026-03-24 14:40:55", agent: "PC_1", event: "/etc/crontab MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/crontab" },
-    { time: "2026-03-24 14:42:30", agent: "PC_3", event: "/usr/lib/libcrypto.so MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/lib/libcrypto.so" },
-    { time: "2026-03-24 14:47:01", agent: "PC_3", event: "/etc/passwd MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/passwd" },
-    { time: "2026-03-24 14:50:33", agent: "PC_1", event: "/tmp/.hidden_script.sh DELETED", type: "DELETED", action: "BLOCKED", path: "/tmp/.hidden_script.sh" },
-    { time: "2026-03-24 14:55:44", agent: "PC_1", event: "/etc/ssh/sshd_config MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/ssh/sshd_config" },
-    { time: "2026-03-24 14:58:20", agent: "PC_3", event: "/var/www/html/index.html MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/var/www/html/index.html" },
-    { time: "2026-03-24 15:01:05", agent: "PC_1", event: "/etc/shadow MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/shadow" },
-    { time: "2026-03-24 15:03:41", agent: "PC_3", event: "/opt/app/config/db.env DELETED", type: "DELETED", action: "BLOCKED", path: "/opt/app/config/db.env" },
-    { time: "2026-03-24 15:06:15", agent: "PC_1", event: "/usr/bin/sudo MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/bin/sudo" },
-    { time: "2026-03-24 15:08:50", agent: "PC_3", event: "/etc/resolv.conf MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/resolv.conf" },
+    { id: "EVT-001", time: "2026-03-24 14:23:10", agent: "PC_1", event: "/etc/myapp/config.yaml MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/myapp/config.yaml" },
+    { id: "EVT-002", time: "2026-03-24 14:25:03", agent: "PC_1", event: "/usr/local/bin/my.service MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/local/bin/my.service" },
+    { id: "EVT-003", time: "2026-03-24 14:26:11", agent: "PC_1", event: "/var/log/myapp.log DELETED", type: "DELETED", action: "BLOCKED", path: "/var/log/myapp.log" },
+    { id: "EVT-004", time: "2026-03-24 14:32:45", agent: "PC_3", event: "/etc/nginx/nginx.conf MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/nginx/nginx.conf" },
+    { id: "EVT-005", time: "2026-03-24 14:35:22", agent: "PC_1", event: "/opt/app/bin/worker MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/opt/app/bin/worker" },
+    { id: "EVT-006", time: "2026-03-24 14:38:07", agent: "PC_3", event: "/var/log/syslog DELETED", type: "DELETED", action: "BLOCKED", path: "/var/log/syslog" },
+    { id: "EVT-007", time: "2026-03-24 14:40:55", agent: "PC_1", event: "/etc/crontab MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/crontab" },
+    { id: "EVT-008", time: "2026-03-24 14:42:30", agent: "PC_3", event: "/usr/lib/libcrypto.so MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/lib/libcrypto.so" },
+    { id: "EVT-009", time: "2026-03-24 14:47:01", agent: "PC_3", event: "/etc/passwd MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/passwd" },
+    { id: "EVT-010", time: "2026-03-24 14:50:33", agent: "PC_1", event: "/tmp/.hidden_script.sh DELETED", type: "DELETED", action: "BLOCKED", path: "/tmp/.hidden_script.sh" },
+    { id: "EVT-011", time: "2026-03-24 14:55:44", agent: "PC_1", event: "/etc/ssh/sshd_config MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/ssh/sshd_config" },
+    { id: "EVT-012", time: "2026-03-24 14:58:20", agent: "PC_3", event: "/var/www/html/index.html MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/var/www/html/index.html" },
+    { id: "EVT-013", time: "2026-03-24 15:01:05", agent: "PC_1", event: "/etc/shadow MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/shadow" },
+    { id: "EVT-014", time: "2026-03-24 15:03:41", agent: "PC_3", event: "/opt/app/config/db.env DELETED", type: "DELETED", action: "BLOCKED", path: "/opt/app/config/db.env" },
+    { id: "EVT-015", time: "2026-03-24 15:06:15", agent: "PC_1", event: "/usr/bin/sudo MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/bin/sudo" },
+    { id: "EVT-016", time: "2026-03-24 15:08:50", agent: "PC_3", event: "/etc/resolv.conf MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/resolv.conf" },
 ];
+
+const REPORT_STORE = new Map();
+
+const PATH_PROFILES = [
+    {
+        match: (p) => p === "/etc/shadow" || p === "/etc/gshadow",
+        category: "사용자 자격 증명 저장소",
+        severity: "Critical",
+        role: "본 파일은 운영체제에 등록된 모든 사용자의 암호화된 비밀번호 정보를 저장하는 자원입니다. 무결성이 손상될 경우 임의 계정의 비밀번호가 재설정되거나 백도어 형태의 인증 우회 통로가 형성될 수 있습니다.",
+        otImpact: "OT 운영 호스트(HMI, 엔지니어링 워크스테이션, Historian 등)에서 본 파일이 변조될 경우 공격자가 운영자(Operator) 또는 엔지니어 계정으로 위장하여 PLC·SIS(안전계장시스템)에 직접 명령을 전달할 수 있는 발판이 형성됩니다. 이는 공정 정지, 안전 인터록 우회, 제어 명령 위조 등 물리적 안전과 직결되는 결과로 이어질 수 있습니다.",
+        mitre: [
+            { id: "T1003.008", title: "운영체제 자격 증명 추출", desc: "시스템에 저장된 사용자 인증 정보를 비인가 경로로 획득하려는 행위입니다." },
+            { id: "T1098", title: "계정 조작", desc: "기존 계정의 인증 정보 또는 권한을 임의로 변경하여 영구적인 접근 통로를 확보하는 행위입니다." },
+        ],
+        scenarios: [
+            "초기 침투에 성공한 위협 주체가 임의의 운영 계정 비밀번호를 자신이 알고 있는 값으로 재설정하여 영구적 접근 경로를 확보하려는 시도입니다.",
+            "비밀번호 해시 필드를 비활성 값으로 대체하여 비밀번호 입력 없이 인증이 통과되도록 만드는 변조 시도입니다.",
+            "정상 비밀번호 변경 도구(passwd, chpasswd 등)를 경유하지 않고 파일을 직접 변경하는 비표준 패턴이 관측되었습니다.",
+        ],
+        followupChecks: [
+            "사건 발생 시각 전후의 인증 로그(/var/log/auth.log, /var/log/secure)를 검토하여 비정상 SSH 로그인 또는 권한 상승 시도 여부를 확인합니다.",
+            "정상 자격 증명 관리 도구 외의 프로세스가 본 파일에 대한 쓰기 시도를 수행했는지 감사 로그를 통해 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p === "/etc/passwd" || p === "/etc/group",
+        category: "사용자 계정 데이터베이스",
+        severity: "Critical",
+        role: "본 파일은 시스템에 등록된 사용자 및 그룹 정보를 보관하는 자원으로, 변조 시 신규 관리자 권한 계정의 추가 또는 기존 계정의 권한 변경이 발생할 수 있습니다.",
+        otImpact: "OT 호스트에서 신규 권한 계정이 추가될 경우 변경 관리 절차 외부에서 공정 통제 권한이 부여되는 결과를 초래합니다. ISA/IEC 62443에서 요구하는 역할 기반 접근 통제(RBAC) 및 최소 권한 원칙이 호스트 단에서 무력화되며, 이는 비인가 운영자에 의한 공정 파라미터 변경으로 이어질 수 있습니다.",
+        mitre: [
+            { id: "T1136.001", title: "신규 계정 생성", desc: "공격자가 자신만 사용 가능한 신규 계정을 시스템에 추가하는 행위입니다." },
+            { id: "T1098", title: "계정 조작", desc: "기존 계정의 인증 정보 또는 권한을 임의로 변경하여 영구적인 접근 통로를 확보하는 행위입니다." },
+        ],
+        scenarios: [
+            "UID 0(관리자 권한)을 가진 신규 계정을 추가하여 백도어 형태의 영구 접근 경로를 확보하려는 시도입니다.",
+            "기존 시스템 계정의 로그인 셸을 인터랙티브 셸로 변경하여 침투 통로로 전환하려는 시도입니다.",
+            "정상 계정 관리 명령(useradd, usermod 등)을 경유하지 않은 직접 편집으로 흔적 최소화를 의도한 패턴입니다.",
+        ],
+        followupChecks: [
+            "현재 등록된 UID 0 계정 목록과 알려진 관리자 계정 명단을 대조하여 비정상 항목 유무를 확인합니다.",
+            "최근 24시간 이내의 계정 추가·변경 명령 실행 이력과 본 사건의 발생 시각을 대조합니다.",
+        ],
+    },
+    {
+        match: (p) => p === "/etc/sudoers" || p.startsWith("/etc/sudoers.d/") || p === "/usr/bin/sudo",
+        category: "권한 상승 정책 및 도구",
+        severity: "Critical",
+        role: "본 자원은 일반 사용자에게 일시적인 관리자 권한을 부여하는 정책 파일 또는 그 도구로, 변조 시 무인증 권한 상승 통로 형성 또는 자격 증명 탈취 백도어 삽입이 발생할 수 있습니다.",
+        otImpact: "OT 환경에서 권한 상승 통로의 변조는 운영 호스트에서 PLC 통신 라이브러리, 엔지니어링 도구, 펌웨어 배포 유틸리티에 대한 비인가 사용을 허용하는 결과로 이어집니다. 공격자가 일반 운영자 계정으로 침투한 뒤 본 메커니즘을 악용해 공정 통제 권한까지 확보할 수 있으며, 이는 IEC 62443에서 규정하는 보안 영역(Zone) 간 권한 격리 원칙을 호스트 단에서 무력화시킵니다.",
+        mitre: [
+            { id: "T1548.003", title: "Sudo 권한 상승 우회", desc: "관리자 권한을 부여하는 정책을 악용하여 정당한 절차 없이 권한을 획득하는 행위입니다." },
+            { id: "T1554", title: "신뢰 프로그램 변조", desc: "신뢰받는 시스템 프로그램에 악성 코드를 삽입하여 사용자 인지 없이 정보가 유출되도록 만드는 행위입니다." },
+        ],
+        scenarios: [
+            "특정 사용자에 대한 무비밀번호 관리자 권한 항목을 정책에 삽입하여 권한 상승의 인증 절차를 무력화하려는 시도입니다.",
+            "권한 상승 도구 자체에 트로이 목마를 삽입하여 사용자가 정당하게 권한을 사용할 때마다 자격 증명이 외부로 유출되도록 만드는 시도입니다.",
+            "정상 정책 검증 절차(visudo)를 경유하지 않은 직접 편집이 관측되었으며, 이는 운영 정책상 비표준 패턴에 해당합니다.",
+        ],
+        followupChecks: [
+            "현재 적용 중인 권한 정책을 출력하여 운영 표준 정책과 차이를 점검하고, 권한 도구의 패키지 무결성을 검증합니다.",
+            "사건 발생 시각 전후의 권한 상승 호출 이력 및 사용자별 권한 변경 기록을 인증 로그에서 확인합니다.",
+        ],
+    },
+    {
+        match: (p) => p === "/etc/ssh/sshd_config" || p.startsWith("/etc/ssh/"),
+        category: "원격 접근 제어 정책",
+        severity: "Critical",
+        role: "본 파일은 외부 호스트에서 시스템에 원격 접속할 때 적용되는 인증 및 접근 제어 정책을 정의하는 자원입니다. 변조 시 관리자 직접 로그인 허용, 비밀번호 인증 활성화, 비인가 인증 키 추가 등 원격 접근 정책 전반이 무력화될 수 있습니다.",
+        otImpact: "OT 환경의 핵심 보안 통제는 IT 망과 OT 망 사이의 경계(ISA/IEC 62443 기준 DMZ)에 위치한 점프 호스트(Jump Host)와 엔지니어링 워크스테이션의 원격 접근 정책에 크게 의존합니다. 본 정책이 변조될 경우 외부 위협 주체가 IT 영역에서 OT 영역으로 직접 침투할 수 있는 경로가 형성되며, 과거 Industroyer·Sandworm·BlackEnergy 등 ICS 침해 사례의 다수가 이러한 단계를 경유하여 OT 영역에 도달하였습니다.",
+        mitre: [
+            { id: "T1098.004", title: "SSH 인증 키 추가", desc: "공격자의 인증 키를 대상 시스템에 등록하여 영구적 원격 접근 통로를 확보하는 행위입니다." },
+            { id: "T1556", title: "인증 절차 변조", desc: "로그인 검증 과정 자체를 변경하여 비정상적인 접근을 허용하도록 만드는 행위입니다." },
+        ],
+        scenarios: [
+            "관리자 계정의 직접 원격 로그인을 재허용하는 정책 변경 시도이며, 이는 무차별 비밀번호 추측 공격의 직접 노출 경로를 형성합니다.",
+            "공격자가 통제하는 인증 키를 등록하여 발각 이후에도 동일 키로 재침투가 가능한 영구 통로를 확보하려는 시도입니다.",
+            "원격 접속 허용 사용자/그룹 제한을 해제하여 비인가 계정의 원격 접근을 가능하게 만드는 시도입니다.",
+        ],
+        followupChecks: [
+            "현재 적용 중인 SSH 데몬 설정을 덤프하여 운영 표준 설정(골든 이미지)과 차이를 비교합니다.",
+            "관리자 및 일반 사용자 계정의 인증 키 파일에 신규 항목이 추가되었는지 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p === "/etc/crontab" || p.startsWith("/etc/cron.") || p.startsWith("/var/spool/cron/"),
+        category: "스케줄러 / 자동 실행 영속성 메커니즘",
+        severity: "High",
+        role: "본 자원은 주기적으로 자동 실행될 작업을 정의하는 파일입니다. 변조 시 공격자 페이로드가 시스템 재기동 또는 의심 프로세스 종료 후에도 자동 복구되어 영구 침입 통로가 유지될 수 있습니다.",
+        otImpact: "OT 환경은 24시간 운영되지만 운영자(Operator) 감시는 교대제로 이루어지므로, 야간·휴일 등 무인 시간대에 공격자 페이로드가 자동 실행되도록 등록될 경우 침해 활동이 운영 감시 사각지대에서 진행될 수 있습니다. 특히 정기 점검 시간대를 표적으로 한 자동 실행 항목은 운영팀의 정상 작업과 구분이 어려워 탐지 지연으로 이어질 수 있습니다.",
+        mitre: [
+            { id: "T1053.003", title: "Cron 예약 작업 악용", desc: "운영체제의 자동 실행 기능을 이용해 공격자 코드를 주기적으로 실행하거나 재부팅 이후에도 활성 상태를 유지하는 행위입니다." },
+        ],
+        scenarios: [
+            "단주기(예: 1분 간격)로 외부 명령 제어(C2) 서버에 대한 콜백을 시도하는 항목을 삽입하여, 단발적 차단 후에도 즉시 재접속이 가능한 통로를 확보하려는 시도입니다.",
+            "기존 정상 예약 작업의 명령 라인 말미에 명령 체이닝 형태로 악성 명령을 부착하여 외관상 변경을 최소화한 위장 시도입니다.",
+            "@reboot 지시자를 사용하여 시스템 부팅 시 1회성으로 실행되는 백도어를 등록하려는 시도입니다.",
+        ],
+        followupChecks: [
+            "사용자별 예약 작업과 시스템 예약 작업 디렉터리 전 영역의 스냅샷을 비교하여 비인가 항목 유무를 확인합니다.",
+            "사건 발생 시각 직후 자동 실행된 자식 프로세스 트리를 추적하여 외부 통신 또는 인터프리터 호출 여부를 확인합니다.",
+        ],
+    },
+    {
+        match: (p) => /\.(env|secret|key|pem|crt)$/.test(p) || /\/secrets?\//.test(p) || /\/credentials?\//.test(p),
+        category: "비밀 정보 저장 파일",
+        severity: "High",
+        role: "본 파일은 데이터베이스 자격 증명, API 인증 키, TLS 인증서 등 민감 정보를 보관하는 자원입니다. 변조 시 정상 서비스의 외부 연동이 공격자 통제 인프라로 우회될 수 있고, 삭제 시 서비스 중단 또는 흔적 인멸의 신호일 가능성이 있습니다.",
+        otImpact: "OT 환경에서 본 자원은 Historian 데이터베이스, MES/ERP 연동 인터페이스, 외부 API 게이트웨이 등에 대한 자격 증명을 보관합니다. 변조 시 공정 데이터의 위·변조 또는 외부 인프라로의 데이터 유출 경로가 형성될 수 있으며, 특히 Historian 자격 증명 변조는 공정 이력 데이터의 신뢰성 자체를 훼손하여 사후 사고 분석을 무력화할 위험이 있습니다.",
+        mitre: [
+            { id: "T1552.001", title: "파일 내 자격 증명 노출", desc: "비밀번호나 인증 키가 저장된 파일을 비인가 경로로 획득하는 행위입니다." },
+            { id: "T1485", title: "데이터 파괴", desc: "중요 파일을 삭제하여 서비스 중단 또는 흔적 제거를 유도하는 행위입니다." },
+        ],
+        scenarios: [
+            "데이터베이스 접속 정보를 공격자 통제 인스턴스로 변조하여 트래픽 중간자 공격 또는 자격 증명 수집 통로를 형성하려는 시도입니다.",
+            "외부 서비스 API 키를 유출한 뒤 흔적 제거 목적으로 파일을 삭제하려는 시도입니다.",
+            "롤아웃 자동화 작업이 잘못된 시점에 비밀 파일을 덮어쓴 운영 사고일 가능성도 배제할 수 없습니다.",
+        ],
+        followupChecks: [
+            "최근 배포 및 CI/CD 파이프라인 실행 로그와 사건 시각을 대조하여 정상 갱신 여부를 식별합니다.",
+            "유출 가능성을 가정하고 해당 자격 증명에 대한 즉시 회전(rotation)을 수행하며, 비밀 관리 시스템(Vault 등) 동기화 상태를 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/var/log/"),
+        category: "감사 로그",
+        severity: "High",
+        role: "본 자원은 시스템 및 애플리케이션 활동의 감사 추적 데이터를 보관하는 파일입니다. 삭제 또는 변조는 일반적으로 흔적 인멸(anti-forensics) 활동의 강력한 지표로 해석됩니다.",
+        otImpact: "OT 환경에서 감사 로그는 공정 이상, 안전 사고, 비인가 접근 시도 등의 사후 분석 및 책임 추적의 핵심 근거입니다. 본 자원의 변조는 잠재적 안전 사고 발생 시 인명·환경 피해의 원인 규명을 불가능하게 만들 수 있으며, NERC CIP·KISA 산업제어시스템 보안 가이드라인 등에서 요구하는 감사 추적성(Auditability) 요건을 직접적으로 위반하는 결과를 초래합니다.",
+        mitre: [
+            { id: "T1070.002", title: "시스템 로그 삭제", desc: "공격자가 자신의 행위 기록을 삭제하여 탐지를 지연시키는 행위입니다." },
+            { id: "T1070.004", title: "파일 삭제", desc: "침해의 증거가 될 수 있는 파일을 삭제하는 행위입니다." },
+        ],
+        scenarios: [
+            "이미 침투에 성공한 위협 주체가 자신의 활동 흔적을 제거하여 탐지를 지연시키려는 시도입니다.",
+            "디스크 가용 공간 부족 등 정상 운영 사유로 로그 회전(rotation) 외 경로에서 직접 삭제된 운영 사고일 가능성이 존재합니다.",
+            "랜섬웨어 본격 작동 직전 단계로 백업 및 감사 로그를 사전 무력화하는 패턴일 가능성이 있습니다.",
+        ],
+        followupChecks: [
+            "원격 로그 수집 인프라(SIEM, 중앙 syslog 서버 등)에 동일 기간의 로그가 보존되어 있는지 확인하고, 해당 사본을 기준으로 분석을 수행합니다.",
+            "삭제 직전·직후의 다른 호스트 활동 로그 및 네트워크 트래픽 기록을 함께 상관 분석합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/usr/lib/") || p.startsWith("/lib/") || p.startsWith("/lib64/"),
+        category: "시스템 핵심 라이브러리",
+        severity: "Critical",
+        role: "본 자원은 운영체제 및 다수 시스템 프로그램이 공통으로 사용하는 동적 링크 라이브러리입니다. 변조 시 해당 라이브러리를 사용하는 모든 호출자에게 페이로드가 동시 주입되는 광범위 영향이 발생합니다.",
+        otImpact: "OT 환경에서 암호화 라이브러리(libcrypto 등)의 변조는 HMI-PLC 간 보안 통신, OPC UA 보안 채널, MQTT/TLS 기반 산업 IoT 게이트웨이 등 산업 프로토콜의 보안 채널 신뢰성에 직접적 영향을 미칩니다. 또한 사용자 공간 후킹 형태의 루트킷이 설치될 경우, 다수의 운영 도구가 동시에 공격자 통제 하에 놓이게 되어 단일 호스트 침해가 OT 영역 전반의 가시성 손실로 확대될 수 있습니다.",
+        mitre: [
+            { id: "T1574.006", title: "LD_PRELOAD를 통한 실행 흐름 가로채기", desc: "정상 라이브러리를 악성 버전으로 대체하거나 우선 로드시켜 모든 호출에 공격자 코드가 개입하도록 만드는 행위입니다." },
+            { id: "T1554", title: "신뢰 프로그램 변조", desc: "신뢰받는 시스템 프로그램에 악성 코드를 삽입하여 사용자 인지 없이 정보가 유출되도록 만드는 행위입니다." },
+        ],
+        scenarios: [
+            "암호화 라이브러리에 백도어를 삽입하여 시스템이 처리하는 TLS 트래픽 가로채기 또는 키 자료(key material) 유출을 시도합니다.",
+            "사용자 공간 후킹 형태의 루트킷을 설치하여 운영 도구의 출력에서 공격자 활동을 은폐합니다.",
+            "보안 업데이트가 표준 패키지 매니저 외부 경로로 적용된 비정상이지만 정당한 변경일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "패키지 매니저(rpm -V, dpkg -V 등)로 라이브러리 무결성을 검증하고, 동적 링커 캐시(ldconfig)와 실제 파일 일치 여부를 확인합니다.",
+            "본 라이브러리를 사용하는 프로세스의 메모리 매핑에 LD_PRELOAD 또는 코드 주입 흔적이 존재하는지 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/usr/bin/") || p.startsWith("/usr/sbin/") || p.startsWith("/bin/") || p.startsWith("/sbin/"),
+        category: "운영체제 표준 실행 파일",
+        severity: "High",
+        role: "본 자원은 운영체제가 기본 제공하는 표준 명령어 파일입니다. 변조 시 해당 명령어를 사용하는 모든 호출자가 영향받는 호스트 내 공급망 침해 형태가 발생할 수 있습니다.",
+        otImpact: "OT 운영자가 시스템 상태 확인에 사용하는 표준 도구(ps, netstat, ss 등)가 변조될 경우, 운영자가 비정상 PLC 통신이나 비인가 프로세스를 인지하지 못하게 되며 이는 침해 사실 자체에 대한 가시성 손실로 이어집니다. OT 환경 운영자가 이상 징후 식별을 위해 신뢰하는 도구가 거짓 정보를 제공하는 상황은 운영 의사결정의 정확성을 근본적으로 훼손합니다.",
+        mitre: [
+            { id: "T1554", title: "신뢰 프로그램 변조", desc: "신뢰받는 시스템 프로그램에 악성 코드를 삽입하여 사용자 인지 없이 정보가 유출되도록 만드는 행위입니다." },
+            { id: "T1036.005", title: "정상 위치·이름 위장", desc: "정상 명령어와 동일한 이름과 위치를 사용하여 악성 프로그램을 위장하는 행위입니다." },
+        ],
+        scenarios: [
+            "프로세스 또는 네트워크 연결 조회 도구를 변조하여 공격자 프로세스·연결을 결과에서 제외하는 사용자 공간 루트킷 패턴입니다.",
+            "표준 패키지 설치 절차를 경유하지 않은 직접 교체로, 패키지 무결성 검증을 우회하려는 의도가 의심됩니다.",
+            "정상 패키지 업그레이드가 비정상 시각 또는 비표준 도구로 수행된 운영 사고일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "패키지 매니저의 무결성 검증 기능으로 변조 여부를 확인하고, 변조본의 해시값을 배포 벤더의 공식 해시와 비교합니다.",
+            "최근 패키지 설치·업그레이드 이력(/var/log/dpkg.log, /var/log/yum.log 등)을 사건 시각과 대조합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/opt/") && /\/bin\//.test(p),
+        category: "사내 배포 애플리케이션 실행 파일",
+        severity: "High",
+        role: "본 자원은 조직이 자체 배포한 애플리케이션 실행 파일입니다. 변조 시 비즈니스 로직 우회, 자격 증명 탈취, 추가 페이로드 주입 등의 통로가 형성될 수 있습니다.",
+        otImpact: "OT 환경에서 자체 개발된 운영 도구(공정 모니터링 게이트웨이, 알람 라우팅 서비스, MES 연동 어댑터 등)의 변조는 공정 데이터 왜곡, 알람 누락, 안전 인터록 우회 등으로 이어질 수 있습니다. 특히 알람 게이트웨이 변조는 운영자가 비상 상황을 인지하지 못하는 상태(false-good)를 만들어 비상 대응 시점을 놓치게 할 위험이 있습니다.",
+        mitre: [
+            { id: "T1554", title: "신뢰 프로그램 변조", desc: "신뢰받는 시스템 프로그램에 악성 코드를 삽입하여 사용자 인지 없이 정보가 유출되도록 만드는 행위입니다." },
+        ],
+        scenarios: [
+            "위협 주체가 빌드 산출물에 외부 통신, 키 입력 기록 등 추가 진입점을 삽입한 시도입니다.",
+            "정상 배포 파이프라인을 경유하지 않은 직접 파일 복사 형태의 교체로, 변경 통제를 우회하려는 신호로 해석됩니다.",
+            "긴급 롤백 절차 수행 중 직접 교체된 정상 변경일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "CI/CD 빌드 시스템의 산출물 해시와 호스트의 실제 파일 해시를 비교하고, 사건 시각의 배포 파이프라인 작업 이력을 확인합니다.",
+            "변조된 바이너리에 대한 정적 분석을 수행하여 외부 호출 import, 비정상 문자열 등의 존재 여부를 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/usr/local/bin/") || p.startsWith("/usr/local/sbin/"),
+        category: "관리자 설치 운영 도구",
+        severity: "High",
+        role: "본 자원은 시스템 관리자가 표준 패키지 외로 직접 배치한 운영 도구입니다. 변조 시 운영자가 일상적으로 사용하는 도구가 위협 주체의 통제 하에 놓이게 됩니다.",
+        otImpact: "OT 엔지니어링 워크스테이션의 관리 도구가 변조될 경우, PLC 펌웨어 다운로드 및 로직 배포 과정의 무결성이 손상될 위험이 있습니다. 변조된 엔지니어링 도구로 PLC에 적재된 로직은 정상 검증 절차를 거치지 않은 코드가 안전 핵심 시스템에 반영되는 결과를 초래할 수 있습니다.",
+        mitre: [
+            { id: "T1554", title: "신뢰 프로그램 변조", desc: "신뢰받는 시스템 프로그램에 악성 코드를 삽입하여 사용자 인지 없이 정보가 유출되도록 만드는 행위입니다." },
+        ],
+        scenarios: [
+            "운영자가 빈번히 호출하는 도구를 변조하여 호출 시점마다 자격 증명 또는 세션 정보를 외부로 유출시키려는 시도입니다.",
+            "정상 배포 절차 외의 직접 교체로 변경 관리 절차를 우회하려는 신호로 해석됩니다.",
+        ],
+        followupChecks: [
+            "원본 배포 산출물 또는 설치 스크립트와의 해시 비교를 통해 변조 여부를 확인합니다.",
+            "본 도구를 자주 호출하는 사용자 계정의 셸 명령 이력을 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/etc/nginx/") || p.startsWith("/etc/httpd/") || p.startsWith("/etc/apache2/"),
+        category: "웹 서버 설정",
+        severity: "High",
+        role: "본 자원은 리버스 프록시, 가상 호스트, TLS 인증 등 웹 트래픽 라우팅 및 접근 제어 정책을 정의하는 설정 파일입니다. 변조 시 트래픽 우회, 인증 우회, 감사 로그 비활성화 등이 가능해집니다.",
+        otImpact: "OT 환경에서 웹 서버는 일반적으로 운영 모니터링 대시보드, 트렌드 차트 콘솔, 알람 관리 콘솔 등 운영자의 의사결정 인터페이스를 서빙합니다. 본 설정의 변조는 운영자가 신뢰하는 정보의 표시 및 접근 제어를 무력화하여, 잘못된 공정 상태 표시 또는 비인가 사용자에 의한 운영 콘솔 접근으로 이어질 수 있습니다.",
+        mitre: [
+            { id: "T1556", title: "인증 절차 변조", desc: "로그인 검증 과정 자체를 변경하여 비정상적인 접근을 허용하도록 만드는 행위입니다." },
+            { id: "T1071.001", title: "웹 프로토콜 악용 통신", desc: "정상적인 웹 통신을 가장하여 공격자 인프라와 정보를 주고받는 행위입니다." },
+        ],
+        scenarios: [
+            "관리 엔드포인트(/admin 등)의 IP 화이트리스트 제한을 해제하여 외부에서의 직접 접근을 허용하려는 시도입니다.",
+            "공격자가 통제하는 도메인을 추가 server_name 또는 Host로 등록하여 트래픽 일부를 외부로 우회시키려는 시도입니다.",
+            "접근 로그 및 오류 로그 기록을 비활성화하여 흔적 최소화를 의도한 변조 시도입니다.",
+        ],
+        followupChecks: [
+            "현재 적용 중인 웹 서버 설정을 출력하여 IaC(Ansible, Helm 등) 원본 설정과의 차이를 비교합니다.",
+            "변경 직후 외부 DNS 조회 및 신규 server_name 매칭 트래픽 발생 여부를 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/etc/myapp/") || (p.startsWith("/etc/") && /\.(yaml|yml|conf|toml|ini|json)$/.test(p)),
+        category: "애플리케이션 / 시스템 구성 파일",
+        severity: "High",
+        role: "본 자원은 서비스의 동작을 결정하는 구성 파일입니다. 변조 시 보안 정책 비활성화, 외부 엔드포인트 변경, 기능 플래그 토글 등 광범위한 영향이 발생할 수 있습니다.",
+        otImpact: "OT 환경에서 본 자원은 공정 임계값(setpoint), 알람 임계값, 안전 인터록 조건 등 공정 운영의 핵심 파라미터를 보관하는 경우가 빈번합니다. 변조 시 직접적인 안전·품질 영향이 발생할 수 있으며, 과거 Stuxnet 사례에서 확인된 바와 같이 임계값의 미세 변경만으로도 장비 손상 또는 안전 사고를 유발할 수 있습니다. ISA/IEC 62443 SR 3.4(소프트웨어 및 정보 무결성) 요건의 직접 위반에 해당합니다.",
+        mitre: [
+            { id: "T1565.001", title: "저장 데이터 조작", desc: "디스크에 저장된 설정 또는 데이터를 임의로 변경하여 시스템 동작을 왜곡하는 행위입니다." },
+        ],
+        scenarios: [
+            "보안 옵션(TLS 검증, 인증 미들웨어 등)을 비활성화하려는 시도입니다.",
+            "외부 호출 엔드포인트를 공격자 통제 인프라로 교체하여 트래픽 가로채기를 시도하려는 변조입니다.",
+            "정상 구성 변경이 변경 관리 절차 외 경로로 수행된 운영 사고일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "Git 등 형상 관리 저장소의 동일 파일과 차이를 비교하고, 변경 의도와 일치하는 변경 요청(PR/티켓)의 존재 여부를 확인합니다.",
+            "구성 변경 직후 해당 서비스의 인증 실패율, 외부 호출량, 공정 파라미터 변동 메트릭을 점검합니다.",
+        ],
+    },
+    {
+        match: (p) => p === "/etc/resolv.conf" || p === "/etc/hosts" || p === "/etc/nsswitch.conf",
+        category: "네트워크 이름 해석 설정",
+        severity: "High",
+        role: "본 자원은 도메인 이름 해석에 사용되는 DNS 서버, 정적 호스트 매핑, 이름 해석 우선순위 등을 정의하는 파일입니다. 변조 시 시스템의 모든 외부 호출(소프트웨어 업데이트, 자격 증명 검증, 라이브러리 다운로드 등)이 공격자 통제 인프라로 우회될 수 있습니다.",
+        otImpact: "OT 환경에서 본 자원의 변조는 PLC 펌웨어 업데이트 서버, 라이선스 검증 서버, NTP 시간 동기화 서버 등 OT 호스트의 외부 의존성이 공격자 통제 인프라로 우회되는 결과를 초래할 수 있습니다. 특히 시간 동기화 변조는 분산 제어 시스템의 이벤트 순서 정합성을 훼손하여, 사후 사고 분석 시 인과 관계 추적을 불가능하게 만들 위험이 있습니다.",
+        mitre: [
+            { id: "T1565.001", title: "저장 데이터 조작", desc: "디스크에 저장된 설정 또는 데이터를 임의로 변경하여 시스템 동작을 왜곡하는 행위입니다." },
+            { id: "T1071.004", title: "DNS 통신 악용", desc: "도메인 이름 해석 통신을 이용하여 공격자 인프라와 정보를 주고받는 행위입니다." },
+        ],
+        scenarios: [
+            "DNS 서버를 공격자 통제 리졸버로 변경하여 라이브러리·패키지 미러 응답을 위조하는 시도입니다.",
+            "/etc/hosts에 정상 도메인을 공격자 IP로 매핑하는 항목을 추가하여 표준 보안 검증을 우회하려는 시도입니다.",
+            "DHCP 또는 cloud-init이 정상 갱신을 수행한 운영 변경일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "DHCP 및 cloud-init 로그와 사건 시각을 대조하고, 호스트의 클라우드 메타데이터 변경 이력을 확인합니다.",
+            "변경 이후 해석된 외부 도메인 응답을 신뢰 외부 리졸버를 통해 재확인하여 위조 여부를 검증합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/var/www/") || p.startsWith("/usr/share/nginx/html/"),
+        category: "웹 콘텐츠",
+        severity: "Medium",
+        role: "본 자원은 공개 웹 서버가 서빙하는 정적 콘텐츠입니다. 변조 시 디페이스(defacement) 또는 악성 스크립트 삽입을 통한 방문자 공격이 가능해집니다.",
+        otImpact: "OT 환경의 운영 모니터링 대시보드 또는 공정 상태 표시 화면이 변조될 경우, 운영자가 인지하는 공정 상태와 실제 공정 상태가 불일치하는 상황(false-good 또는 false-bad)이 발생할 수 있습니다. 이는 운영자가 비상 대응 시점을 놓치거나, 정상 공정에 불필요한 비상 정지를 수행하는 결과로 이어질 수 있습니다.",
+        mitre: [
+            { id: "T1491.001", title: "내부 디페이스", desc: "내부 시스템에 표시되는 콘텐츠를 변조하여 정치적 메시지를 표시하거나 신뢰를 훼손하는 행위입니다." },
+            { id: "T1189", title: "방문자 대상 침해", desc: "변조된 웹페이지를 통해 방문자 시스템에 악성 코드를 배포하려는 행위입니다." },
+        ],
+        scenarios: [
+            "JavaScript 삽입을 통한 방문자 대상 자격 증명 피싱 또는 추가 페이로드 배포 시도입니다.",
+            "정치·이미지성 디페이스로, 직접적 피해는 제한적이나 평판 손상이 큽니다.",
+            "콘텐츠 관리 시스템(CMS)을 통한 정상 콘텐츠 갱신일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "변경된 파일 내 외부 스크립트 src 및 비정상 태그의 존재 여부를 검사합니다.",
+            "웹 서버 접근 로그에서 변경 직전의 PUT/POST 요청 또는 파일 업로드 엔드포인트 호출 이력을 추적합니다.",
+        ],
+    },
+    {
+        match: (p) => p.startsWith("/tmp/") || p.startsWith("/var/tmp/") || p.startsWith("/dev/shm/"),
+        category: "임시 작업 영역",
+        severity: "Medium",
+        role: "본 자원은 시스템 재기동 시 휘발되는 임시 디렉터리입니다. 정상 사용 사례가 다수 존재하나, 점(`.`)으로 시작하는 숨김 파일이나 실행 권한이 부여된 스크립트는 위협 주체의 페이로드 stage 위치로 빈번히 활용됩니다.",
+        otImpact: "OT 환경에서 임시 영역의 비정상 활동은 PLC 직접 명령 도구, 산업 프로토콜 fuzzer, 일회성 펌웨어 추출 도구 등의 stage 위치로 사용되는 경우가 다수 보고되어 있습니다. 본 영역에서 hidden 형태의 실행 파일이 확인될 경우 OT 침해의 후기 단계(공정 통제 시도) 활동의 직접 증거일 가능성이 높습니다.",
+        mitre: [
+            { id: "T1074.001", title: "데이터 임시 보관", desc: "공격자가 외부 유출 전 정보를 호스트 내부에 임시 저장하는 행위입니다." },
+            { id: "T1059.004", title: "유닉스 셸 명령 실행", desc: "유닉스 셸을 통해 임의 명령을 실행하는 행위입니다." },
+        ],
+        scenarios: [
+            "위협 주체가 도구 또는 페이로드 사용 후 흔적 제거를 위해 임시 파일을 삭제한 시도입니다.",
+            "정상 빌드 또는 캐시 파일이 정리된 운영 작업일 가능성이 존재합니다.",
+            "보안 솔루션(EDR/AV)의 자동 격리·삭제 결과일 가능성이 존재합니다.",
+        ],
+        followupChecks: [
+            "삭제 직전 파일의 메타 정보(소유자, 실행 권한, 생성 시각)가 백업되어 있는지 확인합니다.",
+            "보안 솔루션의 격리 이력과 사건 시각을 대조하여 자동 차단 결과인지 식별합니다.",
+        ],
+    },
+];
+
+const DEFAULT_PROFILE = {
+    category: "기타 보호 경로",
+    severity: "Medium",
+    role: "본 자원은 보호 대상으로 등록되어 있는 경로이며, 호스트의 운영 역할에 따라 무결성 손상 시 영향이 다양하게 나타날 수 있습니다.",
+    otImpact: "OT 환경에서의 영향은 본 자원이 속한 호스트의 운영 역할(HMI, 엔지니어링 워크스테이션, Historian, Jump Host 등)에 따라 결정됩니다. 호스트 자산 분류 정보를 확인한 뒤 위험도를 재평가할 것을 권고합니다.",
+    mitre: [
+        { id: "T1565", title: "데이터 조작", desc: "시스템에 저장된 데이터를 임의로 변경하여 동작을 왜곡하는 행위입니다." },
+    ],
+    scenarios: [
+        "정상 운영 변경이 변경 관리 절차 외 경로로 수행된 경우입니다.",
+        "위협 주체가 보호 경로 목록을 사전 인지하지 못한 채 시도한 경우입니다.",
+    ],
+    followupChecks: [
+        "본 자원을 사용하는 부서 또는 담당자에게 정당한 변경 여부를 확인합니다.",
+        "본 경로가 보호 대상으로 등록된 시점과 근거를 검토하여 정책 갱신 필요성을 판단합니다.",
+    ],
+};
+
+function classifyPath(path) {
+    return PATH_PROFILES.find(p => p.match(path)) || DEFAULT_PROFILE;
+}
 
 const Api = {
     getAgents() {
@@ -30,5 +372,83 @@ const Api = {
 
     getEvents() {
         return MOCK_EVENTS;
+    },
+
+    hasReport(eventId) {
+        return REPORT_STORE.has(eventId);
+    },
+
+    getReport(eventId) {
+        return REPORT_STORE.get(eventId);
+    },
+
+    async generateReport(eventId) {
+        const event = MOCK_EVENTS.find(e => e.id === eventId);
+        if (!event) throw new Error("Event not found");
+
+        // Mock LLM call — replace with POST /api/reports/generate
+        await new Promise(r => setTimeout(r, 1200));
+
+        const profile = classifyPath(event.path);
+        const verb = event.type === "DELETED" ? "삭제(unlink)" : "변경(write)";
+        const blockedClause = event.action === "BLOCKED"
+            ? "무결성 가드가 시스템 콜 진입 단계에서 본 시도를 거부하였으며, 실제 파일 시스템 변경은 발생하지 않았습니다. 따라서 시스템은 본 시점에 안전한 상태로 유지되었습니다."
+            : "본 사건은 차단 없이 사후 발견된 사례이므로, 실제 변경 발생 여부를 별도로 확인할 필요가 있습니다.";
+
+        const report = {
+            generatedAt: new Date().toISOString().replace("T", " ").slice(0, 19),
+            severity: profile.severity,
+            sections: [
+                {
+                    title: "1. 사건 개요",
+                    body: `${event.time}, 에이전트 ${event.agent} 호스트에서 보호 대상으로 등록된 자원 "${event.path}" 에 대한 ${verb} 시도가 감지되었습니다.\n\n${blockedClause}\n\n본 자원은 "${profile.category}" 분류에 해당하며, OT 환경의 운영 안정성 및 안전성에 직접적 영향을 미칠 수 있는 핵심 자산으로 식별됩니다.`,
+                },
+                {
+                    title: "2. 영향 자산 분석",
+                    body: `[자산 정보]\n• 자원 경로: ${event.path}\n• 자산 분류: ${profile.category}\n• 호스트: ${event.agent}\n• 시도 유형: ${event.type === "DELETED" ? "삭제(DELETED)" : "변경(MODIFIED)"}\n• 차단 결과: ${event.action}\n\n[자원의 역할]\n${profile.role}`,
+                },
+                {
+                    title: "3. OT 환경 관점에서의 영향",
+                    body: `${profile.otImpact}\n\n[보충 사항]\nOT 환경의 보안 위험은 단순한 정보 보호(C, Confidentiality) 측면을 넘어 가용성(A, Availability), 무결성(I, Integrity), 그리고 안전성(Safety) 영향까지 포괄하여 평가되어야 합니다. 본 사건은 무결성 손상 시도를 가드가 차단한 사례이나, 동일한 시도가 반복되거나 다른 보호 경로에서도 관찰될 경우 표적화된 OT 침해 캠페인의 일부일 가능성을 검토해야 합니다.`,
+                },
+                {
+                    title: "4. 위험도 평가",
+                    body: `[판정 결과]\n${profile.severity}\n\n[판정 근거]\n본 자원은 시스템 보안 통제 또는 OT 운영 통제의 핵심에 위치하며, 무결성 손상 시 단일 호스트 영향을 넘어 인접 시스템(PLC, SIS, Historian, MES 등)으로 영향이 전파될 가능성이 있습니다.\n\n[가중 요소]\n동일 호스트 또는 동일 OT 영역(Zone) 내 다른 보호 경로에 대한 연쇄 시도가 관찰될 경우, 위험도를 한 단계 상향 조정하여 표적 침해 가능성을 우선 검토해야 합니다.`,
+                },
+                {
+                    title: "5. 공격 기법 분류 (MITRE ATT&CK 매핑)",
+                    body: `MITRE ATT&CK은 전 세계 보안 산업이 공유하는 공격 기법 표준 분류 체계입니다. 본 사건과 연관성이 높은 기법은 다음과 같습니다.\n\n` +
+                        profile.mitre.map(t => `■ [${t.id}] ${t.title}\n  ${t.desc}`).join("\n\n"),
+                },
+                {
+                    title: "6. 예상 공격 시나리오",
+                    body: `본 시도의 의도에 대한 가설은 다음과 같으며, 실제 의도는 후속 조사를 통해 확정되어야 합니다.\n\n` +
+                        profile.scenarios.map((s, i) => `■ 시나리오 ${i + 1}\n  ${s}`).join("\n\n"),
+                },
+                {
+                    title: "7. 탐지 및 차단 메커니즘",
+                    body: `본 사건의 탐지 및 차단은 무결성 가드의 사전 차단(pre-emptive blocking) 메커니즘에 의해 수행되었습니다.\n\n[처리 단계]\n1. 호스트 ${event.agent}에서 임의의 프로세스가 자원 "${event.path}"에 대한 ${verb} 시스템 콜을 호출하였습니다.\n\n2. 무결성 가드가 시스템 콜 진입 단계에서 본 호출을 가로채어, 보호 경로 베이스라인과의 일치 여부를 검증하였습니다.\n\n3. 일치 항목이 확인되어, 가드는 호출 측에 권한 거부 응답을 반환하여 시스템 콜의 후속 진행을 차단하였습니다.\n\n4. 차단 사실이 백엔드 관제 시스템으로 전송되었으며, 본 보고서 생성의 트리거가 되었습니다.\n\n[결과]\n${event.action === "BLOCKED" ? `자원 "${event.path}" 의 무결성은 유지되었으며, 시도 측에는 권한 거부 오류가 반환되었습니다. 다만 시도 자체가 발생한 사실은 잠재적 침해 활동의 지표로 보존됩니다.` : "차단이 적용되지 않은 사후 탐지 사례이므로, 실제 변경 발생 여부를 베이스라인 비교를 통해 별도 확인하여야 합니다."}`,
+                },
+                {
+                    title: "8. 단기 대응 권고 (사건 발생 후 1시간 이내)",
+                    body: [
+                        "1. 동일 호스트에서 동일 시간대에 다른 보호 경로에 대한 시도가 다수 관찰되는지 확인합니다. 다수 관찰될 경우 호스트의 네트워크 격리를 우선 검토합니다.",
+                        "2. 사건 발생 시각의 호스트 프로세스 트리를 확보하고, 변경 시도 주체(UID, PID, 부모 프로세스, 실행 파일 해시)를 식별합니다.",
+                        ...profile.followupChecks.map((c, i) => `${i + 3}. ${c}`),
+                        `${profile.followupChecks.length + 3}. 본 호스트가 속한 OT 영역(Zone)의 인접 자산(PLC, HMI, Historian 등)에 대한 비정상 통신 또는 명령 호출 발생 여부를 OT 네트워크 모니터링 시스템에서 점검합니다.`,
+                    ].join("\n\n"),
+                },
+                {
+                    title: "9. 중장기 후속 조치 (사건 발생 후 24시간 이내)",
+                    body: "1. 정당한 변경으로 확정될 경우, 변경 관리 시스템에 사후 등록하고 보호 경로 베이스라인을 갱신합니다.\n\n2. 비정당 변경으로 판정될 경우 침해 사고 대응 절차(IR Playbook)를 발동합니다. 시스템 이미지 보존, 메모리 덤프, 외부 통신 추적, 침해 지표(IOC) 추출 등 표준 포렌식 절차를 수행합니다.\n\n3. 본 사건과 동일 분류의 자원이 OT 환경 내 다른 호스트에도 동일 베이스라인으로 보호되고 있는지 일관성을 점검하고, 누락 항목이 있을 경우 베이스라인 정책을 통합 갱신합니다.\n\n4. 가드 차단 이후에도 동일 시도가 반복될 경우 알람 임계값을 조정하고, 보안 운영 센터(SOC) 또는 OT 보안 관제 조직으로 정식 이관합니다.\n\n5. 본 사건을 ISA/IEC 62443 SR 6.2(연속 모니터링) 및 SR 7.6(네트워크 및 보안 구성 설정) 요건의 운영 증적으로 보존합니다.",
+                },
+                {
+                    title: "10. 참조 기준 및 주의 사항",
+                    body: "[관련 표준 및 가이드라인]\n• ISA/IEC 62443 — 산업 자동화 및 제어 시스템 사이버 보안\n• NIST SP 800-82 Rev.3 — 산업 제어 시스템(ICS) 보안 가이드\n• KISA 산업제어시스템 보안 가이드라인\n• MITRE ATT&CK for ICS — 산업 제어 시스템 대상 공격 기법 분류\n\n[보고서 생성 방식 및 한계]\n본 보고서는 LLM 기반 자동 생성 결과로, 보호 자원의 분류 정보·일반적 위협 인텔리전스·표준 대응 절차에 기반한 분석을 제공합니다. 실제 사건의 의도, 영향 범위, 침해 여부의 최종 판정은 본 보고서를 출발점으로 하여 호스트 컨텍스트 분석, 네트워크 트래픽 분석, 운영팀 협의 등을 통해 확정되어야 합니다.\n\n[보고서 신뢰성 향상 방안]\n동일 (자원 경로, 시도 유형) 조합에 대한 후속 사건은 캐시된 보고서를 재사용함으로써 일관성을 확보할 수 있습니다. 단, 호스트별 컨텍스트가 상이할 경우 보고서를 재생성하여 차이를 반영할 것을 권고합니다.",
+                },
+            ],
+        };
+        REPORT_STORE.set(eventId, report);
+        return report;
     },
 };

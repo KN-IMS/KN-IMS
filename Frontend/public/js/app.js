@@ -35,6 +35,37 @@ const App = {
         this.renderFilteredEvents();
 
         document.getElementById("search-path").addEventListener("input", () => this.resetAndRender());
+
+        document.getElementById("events-tbody").addEventListener("click", (e) => this.handleReportButton(e));
+
+        document.getElementById("report-modal-close").addEventListener("click", () => UI.closeReportModal());
+        document.getElementById("report-modal").addEventListener("click", (e) => {
+            if (e.target.id === "report-modal") UI.closeReportModal();
+        });
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") UI.closeReportModal();
+        });
+
+        document.getElementById("report-print").addEventListener("click", () => window.print());
+    },
+
+    async handleReportButton(e) {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const eventId = btn.dataset.eventId;
+        const action = btn.dataset.action;
+
+        if (action === "view-report") {
+            UI.openReportModal(eventId);
+            return;
+        }
+
+        if (action === "generate-report") {
+            UI.setReportButtonLoading(eventId);
+            await Api.generateReport(eventId);
+            this.renderFilteredEvents();
+            UI.openReportModal(eventId);
+        }
     },
 
     getFilteredEvents() {
