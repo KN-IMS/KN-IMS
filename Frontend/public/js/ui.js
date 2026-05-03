@@ -4,9 +4,13 @@ const STATUS_CLASSES = {
 };
 
 const EVENT_TYPE_CLASSES = {
-    OK: "text-green-600 dark:text-green-400",
     MODIFIED: "text-yellow-600 dark:text-yellow-400",
     DELETED: "text-red-600 dark:text-red-400",
+};
+
+const ACTION_CLASSES = {
+    BLOCKED: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    DETECTED: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
 };
 
 const Dropdown = {
@@ -82,7 +86,6 @@ const UI = {
         Dropdown.init(document.getElementById("filter-type"), [
             { value: "MODIFIED", label: "MODIFIED" },
             { value: "DELETED", label: "DELETED" },
-            { value: "OK", label: "OK" },
         ], "All Types", () => App.resetAndRender());
     },
 
@@ -96,6 +99,7 @@ const UI = {
                 <td class="px-6 py-3">${e.time}</td>
                 <td class="px-6 py-3">${e.agent}</td>
                 <td class="px-6 py-3 ${EVENT_TYPE_CLASSES[e.type] || ""}">${e.event}</td>
+                <td class="px-6 py-3"><span class="px-2 py-1 rounded-full text-xs font-medium ${ACTION_CLASSES[e.action] || ""}">${e.action}</span></td>
             </tr>
         `).join("");
 
