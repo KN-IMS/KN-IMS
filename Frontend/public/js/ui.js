@@ -78,7 +78,6 @@ const UI = {
 
         const agentOptions = agents.map(a => ({ value: a.id, label: a.hostname }));
 
-        Dropdown.init(document.getElementById("agent-select"), agentOptions, "Select Agent");
         Dropdown.init(document.getElementById("filter-agent"), agentOptions, "All Agents", () => App.resetAndRender());
         Dropdown.init(document.getElementById("filter-type"), [
             { value: "MODIFIED", label: "MODIFIED" },

@@ -30,33 +30,10 @@
 
     <main class="max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6">
 
-        <!-- Agents & Commands Card -->
+        <!-- Agents Card -->
         <section class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Agents & Commands</h2>
-            </div>
-
-            <!-- Command Panel -->
-            <div class="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-wrap">
-                <div id="agent-select" class="custom-dropdown relative" data-value="">
-                    <button type="button" class="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 flex items-center gap-2 min-w-[150px] justify-between focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <span class="dropdown-label text-gray-500 dark:text-gray-400">Select Agent</span>
-                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </button>
-                    <ul class="dropdown-menu hidden absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-48 overflow-y-auto"></ul>
-                </div>
-                <input
-                    id="path-input"
-                    type="text"
-                    placeholder="/path/to/monitor"
-                    class="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm flex-1 min-w-[200px] bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                <button id="btn-scan" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
-                    Run Integrity Scan
-                </button>
-                <button id="btn-baseline" class="bg-gray-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700">
-                    Update Baseline
-                </button>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Agents</h2>
             </div>
 
             <!-- Agents Table -->
