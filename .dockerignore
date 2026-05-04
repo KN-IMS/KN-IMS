@@ -1,0 +1,12 @@
+.git
+.omx
+tmp
+
+# Runtime-generated certificates are bind-mounted into the test container.
+# Keep them out of the image build context so root-owned private keys do not
+# break Docker context packaging or leak into the image layer history.
+certs/generated-legacy
+certs/**/*.key
+certs/**/*.csr
+certs/**/*.srl
+certs/**/*_ext.cnf

@@ -21,10 +21,10 @@
 #define FIM_MAX_WATCHES      64
 #define FIM_MAX_PATH         PATH_MAX
 #define FIM_EVENT_BUF_SIZE   (1024 * (sizeof(struct inotify_event) + 256))
-#define FIM_CONFIG_PATH      "/etc/fim_monitor/fim.conf"
+#define FIM_CONFIG_PATH      "/etc/im_monitor/im.conf"
 // #define FIM_PID_FILE         "/var/run/fim_monitor.pid"
-#define FIM_PID_FILE         "/tmp/fim_monitor.pid"
-#define FIM_LOG_FILE         "/var/log/fim_monitor.log"
+#define FIM_PID_FILE         "/tmp/im_monitor.pid"
+#define FIM_LOG_FILE         "/var/log/im_monitor.log"
 #define FIM_EVENT_QUEUE_SIZE 512
 
 /* ── 커널 버전 비교 매크로 ─────────────────────── */

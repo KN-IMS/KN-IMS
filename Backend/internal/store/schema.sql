@@ -1,6 +1,30 @@
 -- fim-server DB 스키마
 -- MySQL 8.0+
 
+DROP PROCEDURE IF EXISTS create_index_if_missing;
+
+DELIMITER $$
+CREATE PROCEDURE create_index_if_missing(
+    IN p_table_name VARCHAR(64),
+    IN p_index_name VARCHAR(64),
+    IN p_statement VARCHAR(1024)
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = p_table_name
+          AND INDEX_NAME = p_index_name
+    ) THEN
+        SET @create_index_sql = p_statement;
+        PREPARE create_index_stmt FROM @create_index_sql;
+        EXECUTE create_index_stmt;
+        DEALLOCATE PREPARE create_index_stmt;
+    END IF;
+END$$
+DELIMITER ;
+
 -- ── 에이전트 ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS agents (
     agent_id      VARCHAR(36)  PRIMARY KEY,
@@ -30,9 +54,9 @@ CREATE TABLE IF NOT EXISTS file_events (
     FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_file_events_agent_id ON file_events(agent_id);
-CREATE INDEX idx_file_events_occurred_at ON file_events(occurred_at DESC);
-CREATE INDEX idx_file_events_event_type ON file_events(event_type);
+CALL create_index_if_missing('file_events', 'idx_file_events_agent_id', 'CREATE INDEX idx_file_events_agent_id ON file_events(agent_id)');
+CALL create_index_if_missing('file_events', 'idx_file_events_occurred_at', 'CREATE INDEX idx_file_events_occurred_at ON file_events(occurred_at DESC)');
+CALL create_index_if_missing('file_events', 'idx_file_events_event_type', 'CREATE INDEX idx_file_events_event_type ON file_events(event_type)');
 
 -- ── 스캔 결과 요약 ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS scan_results (
@@ -46,7 +70,7 @@ CREATE TABLE IF NOT EXISTS scan_results (
     FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_scan_results_agent_id ON scan_results(agent_id);
+CALL create_index_if_missing('scan_results', 'idx_scan_results_agent_id', 'CREATE INDEX idx_scan_results_agent_id ON scan_results(agent_id)');
 
 -- ── 스캔 결과 개별 파일 항목 ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS scan_entries (
@@ -62,8 +86,8 @@ CREATE TABLE IF NOT EXISTS scan_entries (
     FOREIGN KEY (scan_id) REFERENCES scan_results(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_scan_entries_scan_id ON scan_entries(scan_id);
-CREATE INDEX idx_scan_entries_changed ON scan_entries(changed);
+CALL create_index_if_missing('scan_entries', 'idx_scan_entries_scan_id', 'CREATE INDEX idx_scan_entries_scan_id ON scan_entries(scan_id)');
+CALL create_index_if_missing('scan_entries', 'idx_scan_entries_changed', 'CREATE INDEX idx_scan_entries_changed ON scan_entries(changed)');
 
 -- ── 알림 ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS alerts (
@@ -76,6 +100,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     FOREIGN KEY (agent_id) REFERENCES agents(agent_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_alerts_agent_id ON alerts(agent_id);
-CREATE INDEX idx_alerts_resolved ON alerts(resolved);
-CREATE INDEX idx_alerts_severity ON alerts(severity);
+CALL create_index_if_missing('alerts', 'idx_alerts_agent_id', 'CREATE INDEX idx_alerts_agent_id ON alerts(agent_id)');
+CALL create_index_if_missing('alerts', 'idx_alerts_resolved', 'CREATE INDEX idx_alerts_resolved ON alerts(resolved)');
+CALL create_index_if_missing('alerts', 'idx_alerts_severity', 'CREATE INDEX idx_alerts_severity ON alerts(severity)');
+
+DROP PROCEDURE IF EXISTS create_index_if_missing;

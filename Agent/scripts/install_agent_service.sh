@@ -13,6 +13,8 @@ CONFIG_DST="/etc/im_monitor/im.conf"
 SERVICE_SRC="${AGENT_DIR}/fileguard.service"
 SERVICE_DST="/etc/systemd/system/${SERVICE_NAME}"
 LOG_LINES="100"
+BINARY_SRC_DEFAULT=1
+CONFIG_SRC_DEFAULT=1
 
 usage() {
     cat <<'EOF'
@@ -76,10 +78,12 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --binary-src)
             BINARY_SRC="${2:-}"
+            BINARY_SRC_DEFAULT=0
             shift 2
             ;;
         --config-src)
             CONFIG_SRC="${2:-}"
+            CONFIG_SRC_DEFAULT=0
             shift 2
             ;;
         --service-src)
@@ -104,6 +108,14 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ "$BINARY_SRC_DEFAULT" -eq 1 && ! -f "$BINARY_SRC" && -f "${AGENT_DIR}/build/fim_agent" ]]; then
+    BINARY_SRC="${AGENT_DIR}/build/fim_agent"
+fi
+
+if [[ "$CONFIG_SRC_DEFAULT" -eq 1 && ! -f "$CONFIG_SRC" && -f "${AGENT_DIR}/configs/fim.conf" ]]; then
+    CONFIG_SRC="${AGENT_DIR}/configs/fim.conf"
+fi
 
 require_file "$BINARY_SRC"
 require_file "$CONFIG_SRC"

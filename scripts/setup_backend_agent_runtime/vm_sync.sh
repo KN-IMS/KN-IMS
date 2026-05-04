@@ -59,7 +59,10 @@ sync_vm_runtime() {
     log "VM Agent 코드 전송"
     if command -v rsync >/dev/null 2>&1; then
         rsync_ssh="ssh -o StrictHostKeyChecking=accept-new -o PreferredAuthentications=publickey,password,keyboard-interactive -o ConnectTimeout=10 -p ${VM_PORT}"
-        "${VM_REMOTE_AUTH_PREFIX[@]}" rsync -az --delete -e "$rsync_ssh" \
+        "${VM_REMOTE_AUTH_PREFIX[@]}" rsync -az --delete \
+            --exclude 'build/' \
+            --exclude 'cmake-build-*/' \
+            -e "$rsync_ssh" \
             "${AGENT_DIR}/" \
             "${ssh_target}:${VM_REMOTE_DIR}/Agent/" \
             || die "Agent 디렉토리 rsync 실패"

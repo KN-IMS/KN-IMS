@@ -9,7 +9,6 @@ BACKEND_CERT_DIR="${ROOT_DIR}/certs"
 RUNTIME_HELPER_DIR="${ROOT_DIR}/scripts/setup_backend_agent_runtime"
 BACKEND_ENV_FILE="${BACKEND_DIR}/.env"
 BACKEND_SCHEMA_FILE="${BACKEND_DIR}/internal/store/schema.sql"
-AGENT_ENV_TEMPLATE="${AGENT_DIR}/configs/im.env"
 
 MODE="all"
 MODE_EXPLICIT=0
@@ -524,6 +523,28 @@ prepare_docker_command() {
 run_docker() {
     prepare_docker_command
     "${DOCKER_CMD[@]}" "$@"
+}
+
+prepare_docker_bind_mount_permissions() {
+    local runtime_user=""
+    local runtime_group=""
+
+    # On macOS, Docker Desktop/OrbStack bind-mounted file operations are tied to
+    # the host user running docker, not to Linux root inside the container. When
+    # this setup script is launched with sudo, previously generated certs can be
+    # left as root-owned host files and then fail inside the container with
+    # "Permission denied" while regenerating legacy cert material.
+    [[ "$(uname -s)" == "Darwin" ]] || return 0
+    [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]] || return 0
+
+    runtime_user="$SUDO_USER"
+    runtime_group="$(id -gn "$runtime_user" 2>/dev/null || id -gn)"
+
+    if [[ -e "$BACKEND_CERT_DIR" ]]; then
+        log "docker bind mount 인증서 디렉토리 소유자 정리: ${BACKEND_CERT_DIR} -> ${runtime_user}:${runtime_group}"
+        chown -R "${runtime_user}:${runtime_group}" "$BACKEND_CERT_DIR" \
+            || warn "인증서 디렉토리 소유자 정리에 실패했습니다. 필요하면 수동 실행: sudo chown -R ${runtime_user}:${runtime_group} ${BACKEND_CERT_DIR}"
+    fi
 }
 
 parse_vm_target() {
@@ -1270,6 +1291,7 @@ run_backend_setup_in_docker() {
 
     require_command docker
     prepare_docker_command
+    prepare_docker_bind_mount_permissions
     [[ -f "${ROOT_DIR}/docker/backend-runtime-test/Dockerfile" ]] \
         || die "docker backend 테스트 Dockerfile이 없습니다: ${ROOT_DIR}/docker/backend-runtime-test/Dockerfile"
 
@@ -1561,12 +1583,12 @@ EOF
 
 list_running_agent_processes() {
     if command -v pgrep >/dev/null 2>&1; then
-        pgrep -af '(^|/)(agent)( |$)|/usr/local/bin/agent|/build/agent' 2>/dev/null || true
+        pgrep -af '(^|/)(agent|fim_agent)( |$)|/usr/local/bin/(agent|fim_agent)|/build/(agent|fim_agent)' 2>/dev/null || true
         return 0
     fi
 
     if command -v ps >/dev/null 2>&1; then
-        ps -ef 2>/dev/null | grep -E '(/usr/local/bin/agent|/build/agent|[[:space:]]agent([[:space:]]|$))' | grep -v grep || true
+        ps -ef 2>/dev/null | grep -E '(/usr/local/bin/(agent|fim_agent)|/build/(agent|fim_agent)|[[:space:]](agent|fim_agent)([[:space:]]|$))' | grep -v grep || true
     fi
 }
 
@@ -1592,9 +1614,9 @@ agent 후속 명령:
 
 agent 중복 실행 정리:
   sudo systemctl stop fileguard.service 2>/dev/null || true
-  sudo pkill -TERM -f '/usr/local/bin/agent|/build/agent' 2>/dev/null || true
+  sudo pkill -TERM -f '/usr/local/bin/(agent|fim_agent)|/build/(agent|fim_agent)' 2>/dev/null || true
   sleep 1
-  sudo pkill -KILL -f '/usr/local/bin/agent|/build/agent' 2>/dev/null || true
+  sudo pkill -KILL -f '/usr/local/bin/(agent|fim_agent)|/build/(agent|fim_agent)' 2>/dev/null || true
   sudo systemctl start fileguard.service
 
 EOF
@@ -2080,12 +2102,12 @@ setup_database() {
         log "기존 Backend app 계정 감지 — 생성/권한 부여 생략: ${DB_APP_USER}@${DB_APP_HOST}"
     fi
 
-    schema_ready="$(mysql_admin_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${esc_db_name}' AND TABLE_NAME IN ('agents','file_events','alerts');" | tr -d '[:space:]')" \
+    schema_ready="$(mysql_admin_query "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${esc_db_name}' AND TABLE_NAME IN ('agents','file_events','alerts','scan_results','scan_entries');" | tr -d '[:space:]')" \
         || die "기존 schema 존재 여부 확인 실패"
-    if [[ "$schema_ready" == "3" ]]; then
+    if [[ "$schema_ready" == "5" ]]; then
         log "기존 schema 감지 — schema.sql 적용 생략"
     else
-        log "schema.sql 적용: ${BACKEND_SCHEMA_FILE}"
+        log "schema.sql 적용: ${BACKEND_SCHEMA_FILE} (감지된 필수 테이블 ${schema_ready}/5)"
         mysql_admin_import "$DB_NAME" "$BACKEND_SCHEMA_FILE" || die "schema.sql 적용 실패"
     fi
 
@@ -2145,7 +2167,27 @@ backend 실행:
 EOF
 }
 
+restart_agent_service_if_running() {
+    local service_name="fileguard.service"
+
+    command -v systemctl >/dev/null 2>&1 || return 0
+    systemctl cat "$service_name" >/dev/null 2>&1 || {
+        log "fileguard.service가 아직 설치되지 않아 env만 갱신했습니다."
+        return 0
+    }
+
+    if systemctl is-active --quiet "$service_name"; then
+        log "agent env 변경 반영: ${service_name} 재시작"
+        systemctl restart "$service_name" \
+            || warn "${service_name} 재시작에 실패했습니다. 수동 확인: sudo systemctl status ${service_name} --no-pager"
+    else
+        log "fileguard.service가 현재 실행 중이 아니므로 env만 갱신했습니다."
+    fi
+}
+
 setup_agent() {
+    local agent_env_tmp=""
+
     [[ -d "$AGENT_DIR" ]] || die "Agent 디렉토리가 없습니다: ${AGENT_DIR}"
     [[ -n "$BACKEND_HOST" ]] || die "-c/--backend-host 값이 필요합니다."
 
@@ -2164,9 +2206,9 @@ setup_agent() {
 
     mkdir -p /etc/im_monitor/certs
 
-    log "Agent env 템플릿 갱신"
-    backup_if_exists "$AGENT_ENV_TEMPLATE"
-    cat > "$AGENT_ENV_TEMPLATE" <<EOF
+    log "Agent env 생성"
+    agent_env_tmp="$(mktemp "${TMPDIR:-/tmp}/knims-agent-env.XXXXXX")"
+    cat > "$agent_env_tmp" <<EOF
 # IM Agent transport 설정
 # 위치: /etc/im_monitor/im.env
 # 권한: sudo chown root:root im.env && sudo chmod 640 im.env
@@ -2184,7 +2226,9 @@ EOF
     install_file_if_different "$AGENT_KEY_SRC" /etc/im_monitor/certs/agent.key -o root -g root -m 0600
 
     log "agent env 설치"
-    install -o root -g root -m 0640 "$AGENT_ENV_TEMPLATE" /etc/im_monitor/im.env
+    install -o root -g root -m 0640 "$agent_env_tmp" /etc/im_monitor/im.env
+    rm -f "$agent_env_tmp"
+    restart_agent_service_if_running
 
     cat <<EOF
 
@@ -2236,7 +2280,10 @@ sync_vm_runtime() {
     log "VM Agent 코드 전송"
     if command -v rsync >/dev/null 2>&1; then
         rsync_ssh="ssh -p ${VM_PORT}"
-        rsync -az --delete -e "$rsync_ssh" \
+        rsync -az --delete \
+            --exclude 'build/' \
+            --exclude 'cmake-build-*/' \
+            -e "$rsync_ssh" \
             "${AGENT_DIR}/" \
             "${ssh_target}:${VM_REMOTE_DIR}/Agent/" \
             || die "Agent 디렉토리 rsync 실패"

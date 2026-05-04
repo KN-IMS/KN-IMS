@@ -1,9 +1,9 @@
 /*
- * main.c — FIM Monitor 데몬
+ * main.c — IM Monitor 데몬
  *
  * 구조:
  *   ┌──────────────────────────────────────────────────────┐
- *   │                   FIM Monitor 데몬                    │
+ *   │                   IM Monitor 데몬                     │
  *   │                                                      │
  *   │  kernel < 5.8              kernel >= 5.8             │
  *   │  [inotify 스레드]          [eBPF poll 스레드]        │
@@ -25,11 +25,12 @@
  * kernel >= 5.8 → eBPF 단독 (inotify 비활성화)
  *
  * 환경변수 (transport 설정):
- *   FIM_SERVER_HOST   서버 IP/호스트 (기본: 127.0.0.1)
- *   FIM_SERVER_PORT   서버 포트      (기본: 9000)
- *   FIM_CA_CRT        CA 인증서 경로  (기본: ~/fim-agent/certs/ca.crt)
- *   FIM_AGENT_CRT     에이전트 인증서 (기본: ~/fim-agent/certs/agent.crt)
- *   FIM_AGENT_KEY     에이전트 개인키 (기본: ~/fim-agent/certs/agent.key)
+ *   IM_SERVER_HOST    서버 IP/호스트 (기본: 127.0.0.1)
+ *   IM_SERVER_PORT    서버 포트      (기본: 9000)
+ *   IM_CA_CRT         CA 인증서 경로  (기본: /etc/im_monitor/certs/ca.crt)
+ *   IM_AGENT_CRT      에이전트 인증서 (기본: /etc/im_monitor/certs/agent.crt)
+ *   IM_AGENT_KEY      에이전트 개인키 (기본: /etc/im_monitor/certs/agent.key)
+ *   FIM_*             구형 호환용 fallback 변수
  *
  * 시그널:
  *   SIGTERM/SIGINT  → 정상 종료
@@ -469,7 +470,7 @@ static FILE *secure_open(const char *path) {
     return fp;
 }
 
-/* 탐색 경로: -c/-e 플래그 > /etc/fim_monitor/ 만 허용 (CWD·HOME 제거) */
+/* 탐색 경로: -c/-e 플래그 > /etc/im_monitor/ 만 허용 (CWD·HOME 제거) */
 static const char *find_system_file(const char *flag_path,
                                      const char *system_path) {
     if (flag_path) {
@@ -509,8 +510,16 @@ static void load_env(const char *path) {
 
 /* ── transport 헬퍼 ────────────────────────────── */
 static void build_cert_path(char *buf, size_t len, const char *filename) {
-    /* 인증서 기본 경로: /etc/fim_monitor/certs/ */
-    snprintf(buf, len, "/etc/fim_monitor/certs/%s", filename);
+    /* 인증서 기본 경로: /etc/im_monitor/certs/ */
+    snprintf(buf, len, "/etc/im_monitor/certs/%s", filename);
+}
+
+static const char *getenv_prefer(const char *primary, const char *fallback) {
+    const char *value = getenv(primary);
+    if (value && value[0] != '\0') return value;
+    value = getenv(fallback);
+    if (value && value[0] != '\0') return value;
+    return NULL;
 }
 
 static void get_hostname(char *buf, size_t len) {
@@ -551,11 +560,12 @@ static void print_usage(const char *prog) {
     printf("\t-v\t\t상세 로그\n");
     printf("\t-h\t\t도움말\n\n");
     printf("환경변수 (transport):\n");
-    printf("\tFIM_SERVER_HOST\t서버 IP (기본: 127.0.0.1)\n");
-    printf("\tFIM_SERVER_PORT\t서버 포트 (기본: 9000)\n");
-    printf("\tFIM_CA_CRT\tCA 인증서 경로\n");
-    printf("\tFIM_AGENT_CRT\t에이전트 인증서 경로\n");
-    printf("\tFIM_AGENT_KEY\t에이전트 개인키 경로\n\n");
+    printf("\tIM_SERVER_HOST\t서버 IP (기본: 127.0.0.1)\n");
+    printf("\tIM_SERVER_PORT\t서버 포트 (기본: 9000)\n");
+    printf("\tIM_CA_CRT\tCA 인증서 경로\n");
+    printf("\tIM_AGENT_CRT\t에이전트 인증서 경로\n");
+    printf("\tIM_AGENT_KEY\t에이전트 개인키 경로\n");
+    printf("\tFIM_*\t\t구형 호환 fallback 변수\n\n");
 }
 /* ── 메인 ──────────────────────────────────────── */
 int main(int argc, char *argv[]) {
@@ -587,15 +597,19 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* conf 탐색: -c 플래그 > /etc/fim_monitor/fim.conf (CWD·HOME 제거) */
-    const char *found_conf = find_system_file(flag_conf, "/etc/fim_monitor/fim.conf");
+    /* conf 탐색: -c 플래그 > /etc/im_monitor/im.conf (CWD·HOME 제거) */
+    const char *found_conf = find_system_file(flag_conf, FIM_CONFIG_PATH);
+    if (!found_conf && !flag_conf)
+        found_conf = find_system_file(NULL, "/etc/fim_monitor/fim.conf");
     if (!found_conf) found_conf = FIM_CONFIG_PATH; /* 최후 fallback */
 
     // char config_path[FIM_MAX_PATH];
     strncpy(g_config_path, found_conf, sizeof(g_config_path) - 1);
 
-    /* env 탐색: -e 플래그 > /etc/fim_monitor/fim.env */
-    const char *env_path = find_system_file(flag_env, "/etc/fim_monitor/fim.env");
+    /* env 탐색: -e 플래그 > /etc/im_monitor/im.env */
+    const char *env_path = find_system_file(flag_env, "/etc/im_monitor/im.env");
+    if (!env_path && !flag_env)
+        env_path = find_system_file(NULL, "/etc/fim_monitor/fim.env");
 
     /* .env 로드 — 환경변수 우선, .env는 기본값 역할 */
     if (env_path) load_env(env_path);
@@ -701,19 +715,19 @@ int main(int argc, char *argv[]) {
     }
 
     /* ── transport 초기화 (비필수) ─────────────── */
-    const char *server_host = getenv("FIM_SERVER_HOST");
+    const char *server_host = getenv_prefer("IM_SERVER_HOST", "FIM_SERVER_HOST");
     if (!server_host) server_host = "127.0.0.1";
     int server_port = 9000;
-    const char *port_env = getenv("FIM_SERVER_PORT");
+    const char *port_env = getenv_prefer("IM_SERVER_PORT", "FIM_SERVER_PORT");
     if (port_env) server_port = atoi(port_env);
 
     char ca_crt[512], agent_crt[512], agent_key[512];
     const char *e;
-    if ((e = getenv("FIM_CA_CRT")))    strncpy(ca_crt,    e, sizeof(ca_crt) - 1);
+    if ((e = getenv_prefer("IM_CA_CRT", "FIM_CA_CRT"))) snprintf(ca_crt, sizeof(ca_crt), "%s", e);
     else build_cert_path(ca_crt,    sizeof(ca_crt),    "ca.crt");
-    if ((e = getenv("FIM_AGENT_CRT"))) strncpy(agent_crt, e, sizeof(agent_crt) - 1);
+    if ((e = getenv_prefer("IM_AGENT_CRT", "FIM_AGENT_CRT"))) snprintf(agent_crt, sizeof(agent_crt), "%s", e);
     else build_cert_path(agent_crt, sizeof(agent_crt), "agent.crt");
-    if ((e = getenv("FIM_AGENT_KEY"))) strncpy(agent_key, e, sizeof(agent_key) - 1);
+    if ((e = getenv_prefer("IM_AGENT_KEY", "FIM_AGENT_KEY"))) snprintf(agent_key, sizeof(agent_key), "%s", e);
     else build_cert_path(agent_key, sizeof(agent_key), "agent.key");
 
     LOG_INFO_FIM("[transport] 서버: %s:%d", server_host, server_port);
