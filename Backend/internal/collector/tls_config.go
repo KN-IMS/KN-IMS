@@ -32,7 +32,7 @@ func NewTLSConfig(caCert, serverCert, serverKey string) (*tls.Config, error) {
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    caPool,
 		ClientAuth:   tls.RequireAndVerifyClientCert, // mTLS -> 에이전트 인증서 필수
-		MinVersion:   tls.VersionTLS13,               // TLS 1.3 최소 버전 강제
+		MinVersion:   tls.VersionTLS12,               // TLS 1.2 최소 버전 (OpenSSL 1.0.2 호환)
 	}, nil
 }
 

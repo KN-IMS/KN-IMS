@@ -22,6 +22,13 @@ int tls_context_init(fim_tls_ctx_t *out,
                      const char *agent_crt,
                      const char *agent_key)
 {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    /* OpenSSL 1.0.x: 명시적 초기화 필요 */
+    SSL_library_init();
+    SSL_load_error_strings();
+    OpenSSL_add_all_algorithms();
+#endif
+
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
     /* OpenSSL 1.1.0+ */
     SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
