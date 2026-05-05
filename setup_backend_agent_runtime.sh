@@ -8,7 +8,7 @@ AGENT_DIR="${ROOT_DIR}/Agent"
 BACKEND_CERT_DIR="${ROOT_DIR}/certs"
 BACKEND_ENV_FILE="${BACKEND_DIR}/.env"
 BACKEND_SCHEMA_FILE="${BACKEND_DIR}/internal/store/schema.sql"
-AGENT_ENV_TEMPLATE="${AGENT_DIR}/configs/im.env"
+AGENT_ENV_TEMPLATE="${AGENT_DIR}/configs/ig.env"
 
 MODE="all"
 DATABASE_URL=""
@@ -30,12 +30,12 @@ SKIP_BACKEND_DEPS=0
 GENERATE_LEGACY_CERTS=0
 SETUP_DATABASE=1
 CERT_OUTPUT_DIR=""
-CA_CN="KN-IMS Legacy Root CA"
-SERVER_CN="KN-IMS Backend"
-AGENT_CN="KN-IMS Agent"
+CA_CN="KN-IG Legacy Root CA"
+SERVER_CN="KN-IG Backend"
+AGENT_CN="KN-IG Agent"
 DB_HOST="127.0.0.1"
 DB_PORT="3306"
-DB_NAME="fileguard"
+DB_NAME="kn_ig"
 DB_ADMIN_USER="root"
 DB_ADMIN_PASSWORD=""
 DB_APP_USER="fileguard_app"
@@ -48,7 +48,7 @@ Usage:
 
 Modes:
   backend   Install backend dependencies, copy backend certs, write Backend/.env
-  agent     Install agent certs/env under /etc/im_monitor with proper permissions
+  agent     Install agent certs/env under /etc/ig_monitor with proper permissions
   all       Run backend + agent setup together
 
 Optional:
@@ -61,16 +61,16 @@ Optional:
   --vm-host VALUE          VM host for automatic Agent sync
   --vm-user VALUE          VM SSH user for automatic Agent sync
   --vm-port VALUE          VM SSH port for automatic Agent sync (default: 22)
-  --vm-dir VALUE           VM target directory (default: /home/<user>/KN-IMS)
+  --vm-dir VALUE           VM target directory (default: /home/<user>/KN-IG)
   --generate-legacy-certs  Generate RSA 2048 + SHA256 CA/server/agent certs
   --cert-output-dir PATH   Output directory for generated certs
-  --ca-cn VALUE            CA certificate CN (default: KN-IMS Legacy Root CA)
-  --server-cn VALUE        Server certificate CN (default: KN-IMS Backend)
-  --agent-cn VALUE         Agent certificate CN (default: KN-IMS Agent)
+  --ca-cn VALUE            CA certificate CN (default: KN-IG Legacy Root CA)
+  --server-cn VALUE        Server certificate CN (default: KN-IG Backend)
+  --agent-cn VALUE         Agent certificate CN (default: KN-IG Agent)
   --skip-db-setup          Do not create DB or apply Backend schema.sql
   --db-host VALUE          MySQL host for backend app and DB setup (default: 127.0.0.1)
   --db-port VALUE          MySQL port for backend app and DB setup (default: 3306)
-  --db-name VALUE          MySQL database name (default: fileguard)
+  --db-name VALUE          MySQL database name (default: kn_ig)
   --db-admin-user VALUE    MySQL admin user for CREATE DATABASE/USER (default: root)
   --db-admin-password VAL  MySQL admin password
   --db-app-user VALUE      Backend app DB user (default: fileguard_app)
@@ -126,7 +126,7 @@ backup_if_exists() {
 
 require_root() {
     if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-        die "agent 모드는 /etc/im_monitor 에 설치하므로 sudo 권한이 필요합니다."
+        die "agent 모드는 /etc/ig_monitor 에 설치하므로 sudo 권한이 필요합니다."
     fi
 }
 
@@ -273,7 +273,7 @@ finalize_vm_sync_config() {
     [[ -n "$VM_USER" ]] || die "VM 자동 전송을 사용하려면 VM SSH user가 필요합니다."
 
     if [[ -z "$VM_REMOTE_DIR" ]]; then
-        VM_REMOTE_DIR="/home/${VM_USER}/KN-IMS"
+        VM_REMOTE_DIR="/home/${VM_USER}/KN-IG"
     fi
 
     [[ "$VM_REMOTE_DIR" == /* ]] || die "VM 대상 디렉토리는 절대 경로여야 합니다: ${VM_REMOTE_DIR}"
@@ -999,37 +999,37 @@ setup_agent() {
 
     require_root
 
-    mkdir -p /etc/im_monitor/certs
+    mkdir -p /etc/ig_monitor/certs
 
     log "Agent env 템플릿 갱신"
     backup_if_exists "$AGENT_ENV_TEMPLATE"
     cat > "$AGENT_ENV_TEMPLATE" <<EOF
 # IM Agent transport 설정
-# 위치: /etc/im_monitor/im.env
-# 권한: sudo chown root:root im.env && sudo chmod 640 im.env
+# 위치: /etc/ig_monitor/ig.env
+# 권한: sudo chown root:root ig.env && sudo chmod 640 ig.env
 
-IM_SERVER_HOST=${BACKEND_HOST}
-IM_SERVER_PORT=${TCP_ADDR#:}
-IM_CA_CRT=/etc/im_monitor/certs/ca.crt
-IM_AGENT_CRT=/etc/im_monitor/certs/agent.crt
-IM_AGENT_KEY=/etc/im_monitor/certs/agent.key
+IG_SERVER_HOST=${BACKEND_HOST}
+IG_SERVER_PORT=${TCP_ADDR#:}
+IG_CA_CRT=/etc/ig_monitor/certs/ca.crt
+IG_AGENT_CRT=/etc/ig_monitor/certs/agent.crt
+IG_AGENT_KEY=/etc/ig_monitor/certs/agent.key
 EOF
 
     log "agent 인증서 설치"
-    install -o root -g root -m 0644 "$CA_SRC" /etc/im_monitor/certs/ca.crt
-    install -o root -g root -m 0644 "$AGENT_CERT_SRC" /etc/im_monitor/certs/agent.crt
-    install -o root -g root -m 0600 "$AGENT_KEY_SRC" /etc/im_monitor/certs/agent.key
+    install -o root -g root -m 0644 "$CA_SRC" /etc/ig_monitor/certs/ca.crt
+    install -o root -g root -m 0644 "$AGENT_CERT_SRC" /etc/ig_monitor/certs/agent.crt
+    install -o root -g root -m 0600 "$AGENT_KEY_SRC" /etc/ig_monitor/certs/agent.key
 
     log "agent env 설치"
-    install -o root -g root -m 0640 "$AGENT_ENV_TEMPLATE" /etc/im_monitor/im.env
+    install -o root -g root -m 0640 "$AGENT_ENV_TEMPLATE" /etc/ig_monitor/ig.env
 
     cat <<EOF
 
 agent 인증키 및 권한 설정 완료
-  env  : /etc/im_monitor/im.env
-  cert : /etc/im_monitor/certs/ca.crt
-  cert : /etc/im_monitor/certs/agent.crt
-  key  : /etc/im_monitor/certs/agent.key
+  env  : /etc/ig_monitor/ig.env
+  cert : /etc/ig_monitor/certs/ca.crt
+  cert : /etc/ig_monitor/certs/agent.crt
+  key  : /etc/ig_monitor/certs/agent.key
 
 다음 단계:
   기존 agent 설치 스크립트 또는 systemd/service 절차를 그대로 사용
