@@ -1,6 +1,6 @@
 # Backend
 
-KN-IMS Backend는 agent가 전송한 이벤트를 수집하고 저장하며,
+KN-IG Backend는 agent가 전송한 이벤트를 수집하고 저장하며,
 frontend에 실시간으로 전달하는 collector backend입니다.
 
 ## 역할
@@ -60,7 +60,7 @@ frontend에 실시간으로 전달하는 collector backend입니다.
 collector는 mTLS를 사용합니다.
 
 - server는 `TLS_CERT`, `TLS_KEY`로 서버 인증서를 제시
-- client agent는 `IM_AGENT_CRT`, `IM_AGENT_KEY`로 클라이언트 인증서를 제시
+- client agent는 `IG_AGENT_CRT`, `IG_AGENT_KEY`로 클라이언트 인증서를 제시
 - backend는 `TLS_CA` 기준으로 agent 인증서를 검증
 
 현재 backend 최소 TLS 버전은 `TLS 1.2`입니다.
@@ -73,7 +73,7 @@ collector는 mTLS를 사용합니다.
 `.env` 예시:
 
 ```env
-DATABASE_URL=root@tcp(127.0.0.1:3306)/fileguard?parseTime=true
+DATABASE_URL=root@tcp(127.0.0.1:3306)/kn_ig?parseTime=true
 HTTP_ADDR=:18080
 TCP_ADDR=:9000
 TLS_CA=/abs/path/ca.crt
