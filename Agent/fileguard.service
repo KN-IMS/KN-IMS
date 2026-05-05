@@ -1,12 +1,12 @@
 [Unit]
-Description=FileGuard IM Agent - Integrity Monitor
+Description=FileGuard IG Agent - Integrity Guard
 Documentation=https://github.com/KN-IG/KN-IG
 After=network.target
 Wants=network.target
 
 [Service]
 Type=notify
-ExecStart=/usr/local/bin/agent -f -c /etc/im_monitor/im.conf
+ExecStart=/usr/local/bin/agent -f -c /etc/ig_monitor/ig.conf
 Restart=on-failure
 RestartSec=5s
 WatchdogSec=30s
