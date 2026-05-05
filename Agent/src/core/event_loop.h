@@ -1,5 +1,5 @@
-#ifndef IM_EVENT_LOOP_H
-#define IM_EVENT_LOOP_H
+#ifndef IG_EVENT_LOOP_H
+#define IG_EVENT_LOOP_H
 
 #include <stdint.h>
 
@@ -23,4 +23,4 @@ int  event_loop_remove(int fd);
 void event_loop_run(void);
 void event_loop_cleanup(void);
 
-#endif /* IM_EVENT_LOOP_H */
+#endif /* IG_EVENT_LOOP_H */
