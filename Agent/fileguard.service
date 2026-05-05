@@ -1,6 +1,6 @@
 [Unit]
 Description=FileGuard IM Agent - Integrity Monitor
-Documentation=https://github.com/KN-IMS/KN-IMS
+Documentation=https://github.com/KN-IG/KN-IG
 After=network.target
 Wants=network.target
 

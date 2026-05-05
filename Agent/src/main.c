@@ -620,7 +620,7 @@ int main(int argc, char *argv[]) {
     int kver_minor = (kver % 65536) / 256;
 
     LOG_INFO_FIM("╔══════════════════════════════════════╗");
-    LOG_INFO_FIM("║   KGU-FIMS                           ║");
+    LOG_INFO_FIM("║   KGU-IG                             ║");
     LOG_INFO_FIM("║   pid=%d  kernel=%d.%d  mode=%s",
                  getpid(), kver_major, kver_minor,
                  g_ebpf_block ? "lock" : "maintenance");
