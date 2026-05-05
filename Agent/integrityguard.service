@@ -1,5 +1,5 @@
 [Unit]
-Description=FileGuard IG Agent - Integrity Guard
+Description=IntegrityGuard Agent
 Documentation=https://github.com/KN-IG/KN-IG
 After=network.target
 Wants=network.target
