@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/KN-IMS/KN-IMS/Backend/internal"
+	"github.com/KN-IG/KN-IG/Backend/internal"
 	"github.com/gin-gonic/gin"
 )
 
