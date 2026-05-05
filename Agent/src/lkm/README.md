@@ -1,4 +1,4 @@
-# fim_lkm — LKM 파일 차단 커널 모듈
+# ig_lkm — LKM 파일 차단 커널 모듈
 
 kernel 3.10+ (CentOS 7)에서 동작하는 sys_call_table 후킹 기반 파일 무결성 모듈.  
 eBPF LSM이 불가능한 환경(kernel < 5.8)에서 파일 변경을 차단·탐지합니다.
@@ -10,32 +10,32 @@ eBPF LSM이 불가능한 환경(kernel < 5.8)에서 파일 변경을 차단·탐
 ```
 유저스페이스                    커널 공간
 ──────────────                  ──────────────────────────────────
-fim_agent
+ig_agent
   │
-  ├─ lkm_client_init()   ──→   /dev/fim_lkm  (chardev)
+  ├─ lkm_client_init()   ──→   /dev/ig_lkm  (chardev)
   │
-  ├─ lkm_add_from_baseline()   ioctl(FIM_IOC_ADD_INODE)
-  │   베이스라인 inode 주입  ──→   fim_lkm_policy.c
+  ├─ lkm_add_from_baseline()   ioctl(IG_IOC_ADD_INODE)
+  │   베이스라인 inode 주입  ──→   ig_lkm_policy.c
   │                              (해시테이블: dev+ino → mask/block/path)
   │
-  └─ lkm_event_thread()        read(/dev/fim_lkm)  ←── kfifo
-       이벤트 수신 루프              fim_lkm_events.c
+  └─ lkm_event_thread()        read(/dev/ig_lkm)  ←── kfifo
+       이벤트 수신 루프              ig_lkm_events.c
                                       ▲
-                               fim_lkm_hooks.c
+                               ig_lkm_hooks.c
                                sys_call_table 후킹
                                ┌──────────────────┐
-                               │ sys_write         │ → FIM_OP_WRITE
+                               │ sys_write         │ → IG_OP_WRITE
                                │ sys_truncate      │
                                │ sys_ftruncate     │
                                │ sys_open (O_TRUNC)│
                                │ sys_openat        │
                                │ sys_creat         │
-                               │ sys_unlink        │ → FIM_OP_DELETE
+                               │ sys_unlink        │ → IG_OP_DELETE
                                │ sys_unlinkat      │
-                               │ sys_rename        │ → FIM_OP_RENAME
+                               │ sys_rename        │ → IG_OP_RENAME
                                │ sys_renameat      │
                                │ sys_renameat2 *   │
-                               │ sys_chmod         │ → FIM_OP_WRITE
+                               │ sys_chmod         │ → IG_OP_WRITE
                                │ sys_fchmodat      │
                                │ sys_chown         │
                                │ sys_fchownat      │
@@ -54,14 +54,14 @@ fim_agent
 
 | 파일 | 역할 |
 |---|---|
-| `fim_lkm_main.c` | 모듈 진입점 (`module_init` / `module_exit`) |
-| `fim_lkm_hooks.c` | sys_call_table 후킹 · 정책 체크 · 이벤트 발행 |
-| `fim_lkm_policy.c` | inode 기반 정책 해시테이블 (rwlock 보호) |
-| `fim_lkm_events.c` | kfifo 이벤트 큐 + workqueue deferred wake_up |
-| `fim_lkm_chardev.c` | `/dev/fim_lkm` char device (ioctl / blocking read / poll) |
-| `fim_lkm_common.h` | 유저·커널 공유 구조체 및 상수 (`FIM_OP_*`, `FIM_BLOCK_*`) |
-| `fim_lkm_policy.h` | 정책 API 선언 |
-| `fim_lkm_events.h` | 이벤트 큐 API 선언 |
+| `ig_lkm_main.c` | 모듈 진입점 (`module_init` / `module_exit`) |
+| `ig_lkm_hooks.c` | sys_call_table 후킹 · 정책 체크 · 이벤트 발행 |
+| `ig_lkm_policy.c` | inode 기반 정책 해시테이블 (rwlock 보호) |
+| `ig_lkm_events.c` | kfifo 이벤트 큐 + workqueue deferred wake_up |
+| `ig_lkm_chardev.c` | `/dev/ig_lkm` char device (ioctl / blocking read / poll) |
+| `ig_lkm_common.h` | 유저·커널 공유 구조체 및 상수 (`IG_OP_*`, `IG_BLOCK_*`) |
+| `ig_lkm_policy.h` | 정책 API 선언 |
+| `ig_lkm_events.h` | 이벤트 큐 API 선언 |
 | `lkm_client.c/h` | 유저스페이스 클라이언트 (ioctl 래퍼 · 이벤트 수신) |
 
 ---
@@ -71,9 +71,9 @@ fim_agent
 ```
 inode_policy_add(dev, ino, mask, block, path)
                                │       │
-                        FIM_OP_WRITE   FIM_BLOCK_DENY   → -EPERM 반환
-                        FIM_OP_DELETE  FIM_BLOCK_AUDIT  → 탐지만, 허용
-                        FIM_OP_RENAME
+                        IG_OP_WRITE   IG_BLOCK_DENY   → -EPERM 반환
+                        IG_OP_DELETE  IG_BLOCK_AUDIT  → 탐지만, 허용
+                        IG_OP_RENAME
 ```
 
 - **키**: `(dev, ino)` — inode 번호 기반이므로 경로 이름 변경에 강건
@@ -105,14 +105,14 @@ cd src/lkm
 make
 
 # 로드
-sudo insmod fim_lkm.ko
+sudo insmod ig_lkm.ko
 dmesg | tail -5       # "hooks installed" 확인
 
 # 상태 확인
-lsmod | grep fim_lkm
+lsmod | grep ig_lkm
 
 # 언로드
-sudo rmmod fim_lkm
+sudo rmmod ig_lkm
 ```
 
 ---
@@ -120,14 +120,14 @@ sudo rmmod fim_lkm
 ## 차단 테스트
 
 ```bash
-# fim_agent 실행 중 상태에서 (lock 모드)
+# ig_agent 실행 중 상태에서 (lock 모드)
 echo "tamper" >> /etc/important/file   # → Permission denied (EPERM)
 rm /etc/important/file                 # → Operation not permitted
 mv /etc/important/file /tmp/           # → Operation not permitted
 
 # dmesg로 커널 로그 확인
-dmesg | grep fim_lkm
-# fim_lkm: DENY write: comm=bash dev=... ino=...
+dmesg | grep ig_lkm
+# ig_lkm: DENY write: comm=bash dev=... ino=...
 ```
 
 ---

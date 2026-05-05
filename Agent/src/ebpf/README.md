@@ -1,4 +1,4 @@
-# fim_trace — eBPF LSM 파일 감시 모듈
+# ig_trace — eBPF LSM 파일 감시 모듈
 
 kernel 5.8+ 에서 동작하는 CO-RE(Compile Once – Run Everywhere) eBPF 프로그램.  
 LSM(Linux Security Module) 훅으로 파일 접근을 탐지·차단하고 PID/UID/프로세스명을 유저스페이스로 전달합니다.
@@ -10,7 +10,7 @@ LSM(Linux Security Module) 훅으로 파일 접근을 탐지·차단하고 PID/U
 ```
 유저스페이스                    커널 공간
 ──────────────                  ──────────────────────────────────
-fim_agent
+ig_agent
   │
   ├─ ebpf_policy_init()  ──→   BPF 맵 로드 (skeleton)
   │
@@ -18,9 +18,9 @@ fim_agent
   │   베이스라인 경로 주입   ──→  policy_map (inode → mask/block)
   │
   └─ ebpf_poll_thread()        Ring Buffer 폴링
-       이벤트 수신 루프    ←──   fim_lkm_events (ring_buf)
+       이벤트 수신 루프    ←──   ig_lkm_events (ring_buf)
                                       ▲
-                               fim_trace.bpf.c
+                               ig_trace.bpf.c
                                LSM 훅 (BPF_PROG_TYPE_LSM)
                                ┌──────────────────────────┐
                                │ lsm/inode_permission      │ VFS 권한 검사
@@ -37,10 +37,10 @@ fim_agent
 
 | 파일 | 역할 |
 |---|---|
-| `fim_trace.bpf.c` | eBPF 커널 프로그램 (LSM 훅 구현) |
-| `fim_trace.c` | 유저스페이스 로더 · Ring Buffer 폴링 |
-| `fim_trace_api.h` | fim_agent ↔ eBPF 로더 인터페이스 |
-| `fim_trace.skel.h` | bpftool이 생성하는 C 스켈레톤 헤더 (빌드 산출물) |
+| `ig_trace.bpf.c` | eBPF 커널 프로그램 (LSM 훅 구현) |
+| `ig_trace.c` | 유저스페이스 로더 · Ring Buffer 폴링 |
+| `ig_trace_api.h` | ig_agent ↔ eBPF 로더 인터페이스 |
+| `ig_trace.skel.h` | bpftool이 생성하는 C 스켈레톤 헤더 (빌드 산출물) |
 | `vmlinux.h` | CO-RE용 커널 타입 정의 (bpftool btf dump으로 생성) |
 
 ---
@@ -145,19 +145,19 @@ make
 ### 빌드 단계
 
 ```
-fim_trace.bpf.c
+ig_trace.bpf.c
     │
     │  clang -g -O2 -target bpf -D__TARGET_ARCH_x86
     ▼
-.output/fim_trace.tmp.bpf.o     ← 원시 BPF ELF
+.output/ig_trace.tmp.bpf.o     ← 원시 BPF ELF
     │
     │  bpftool gen object        (BTF 재배치 / CO-RE 처리)
     ▼
-.output/fim_trace.bpf.o         ← 로드 가능한 최종 BPF 오브젝트
+.output/ig_trace.bpf.o         ← 로드 가능한 최종 BPF 오브젝트
     │
     │  bpftool gen skeleton
     ▼
-fim_trace.skel.h                ← 유저스페이스 로더용 C 헤더 (자동 생성)
+ig_trace.skel.h                ← 유저스페이스 로더용 C 헤더 (자동 생성)
 ```
 
 ---
