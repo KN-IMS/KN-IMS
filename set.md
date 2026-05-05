@@ -15,8 +15,8 @@ cd KN-IG
 이 단계에서 자동으로 하는 것:
 
 - MySQL 확인
-- `kn_ig` DB 생성
-- `kn_ig_app` 계정 생성
+- `integrityguard` DB 생성
+- `integrityguard_app` 계정 생성
 - schema 적용
 - `Backend/.env` 생성
 - backend/server/agent 인증서 생성 또는 재생성

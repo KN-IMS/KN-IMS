@@ -35,10 +35,10 @@ SERVER_CN="KN-IG Backend"
 AGENT_CN="KN-IG Agent"
 DB_HOST="127.0.0.1"
 DB_PORT="3306"
-DB_NAME="kn_ig"
+DB_NAME="integrityguard"
 DB_ADMIN_USER="root"
 DB_ADMIN_PASSWORD=""
-DB_APP_USER="fileguard_app"
+DB_APP_USER="integrityguard_app"
 DB_APP_PASSWORD=""
 
 usage() {
@@ -70,10 +70,10 @@ Optional:
   --skip-db-setup          Do not create DB or apply Backend schema.sql
   --db-host VALUE          MySQL host for backend app and DB setup (default: 127.0.0.1)
   --db-port VALUE          MySQL port for backend app and DB setup (default: 3306)
-  --db-name VALUE          MySQL database name (default: kn_ig)
+  --db-name VALUE          MySQL database name (default: integrityguard)
   --db-admin-user VALUE    MySQL admin user for CREATE DATABASE/USER (default: root)
   --db-admin-password VAL  MySQL admin password
-  --db-app-user VALUE      Backend app DB user (default: fileguard_app)
+  --db-app-user VALUE      Backend app DB user (default: integrityguard_app)
   --db-app-password VAL    Backend app DB password
   --skip-backend-deps      Do not install backend system packages or run go mod download
   -h, --help               Show help

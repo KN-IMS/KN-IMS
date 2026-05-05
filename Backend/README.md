@@ -73,7 +73,7 @@ collector는 mTLS를 사용합니다.
 `.env` 예시:
 
 ```env
-DATABASE_URL=root@tcp(127.0.0.1:3306)/kn_ig?parseTime=true
+DATABASE_URL=root@tcp(127.0.0.1:3306)/integrityguard?parseTime=true
 HTTP_ADDR=:18080
 TCP_ADDR=:9000
 TLS_CA=/abs/path/ca.crt
