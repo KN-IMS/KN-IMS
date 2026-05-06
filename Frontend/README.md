@@ -1,45 +1,94 @@
 # Frontend
 
-KN-IG 콘솔(브라우저 + Tauri 데스크톱)의 UI 레이어. 전체 데이터 흐름은 [`architecture.png`](architecture.png) 참고.
+KN-IG 콘솔(브라우저 + Tauri 데스크톱)의 UI 레이어. 데이터 흐름은 [`architecture.png`](architecture.png) 참고.
 
 ## 구성
 
 ```
 Frontend/
-├── architecture.png            # 콘솔 ↔ Mirror Server ↔ Backend 데이터 흐름 다이어그램
-├── public/                     # 브라우저에서 그대로 서빙되는 정적 자산
-│   ├── index.html              # 메인 대시보드 (Agents / Events / Alerts)
-│   ├── login.html              # PIN 기반 로그인 페이지
-│   ├── assets/                 # 빌드된 tailwind.css 등
+├── public/                 # 정적 자산 — Tauri가 그대로 wrap
+│   ├── index.html          # 대시보드 (Agents / Events)
+│   ├── login.html          # PIN 로그인
+│   ├── config.js           # 빌드별 설정 (Mirror URL 등) — 빌드 직전 수정
+│   ├── assets/             # tailwind.css, 브랜드 자산
 │   └── js/
-│       ├── api.js              # Mock 데이터 + API 클라이언트
-│       ├── app.js              # 대시보드 라우팅/페이징/테마
-│       ├── ui.js               # 공통 렌더 헬퍼
-│       └── auth.js             # 로그인 페이지 상태 머신
-├── desktop/                    # Tauri 2 데스크톱 셸 (별도 README 참고)
+│       ├── api.js          # Mirror Server REST 클라이언트 (Bearer + 401 redirect)
+│       ├── app.js          # 라우팅·페이징·테마 + 5초 주기 refresh
+│       ├── ui.js           # 렌더 헬퍼
+│       └── auth.js         # 로그인 상태 머신
+├── desktop/                # Tauri 2 데스크톱 셸
 ├── tailwind.config.js
 └── tailwind.input.css
 ```
 
-## 인증 (`login.html` + `auth.js`)
+## 빌드
 
-상태 머신: `loading → { setup | login | locked } → success → /index.html`
+사전 요구사항: Node 18+, Rust toolchain, Xcode CLI tools (macOS).
 
-- 첫 진입 시 `Auth.getStatus()` 결과로 분기 (`unconfigured`이면 setup, `configured`면 login).
-- 현재 백엔드는 모킹된 `MockAuthApi`로, PIN을 `localStorage`에 저장해 setup/login 흐름만 형상 검증.
-- 실제 Mirror Server 연동은 `auth.js` 상단의 TODO 블록 참고:
-  - `GET  /auth/status`  → `{ state: 'unconfigured' | 'configured' | 'locked' }`
-  - `POST /auth/setup`   body: `{ pin }` → `{ token }`
-  - `POST /auth/login`   body: `{ pin }` → `{ token }`
-- 발급된 토큰은 `localStorage["ig.session.token"]`에 저장되어 이후 콘솔 API 호출에 사용된다.
+| 작업 | 명령 |
+|---|---|
+| dev (UI 반복) | `cd desktop && npm run tauri dev` |
+| Tailwind watch | `npx tailwindcss -i tailwind.input.css -o public/assets/tailwind.css --watch` |
+| 릴리스 (.app/.dmg) | `cd desktop && npm run tauri build` |
 
-## Tailwind 빌드
+산출물 (Apple Silicon 기본):
+- `desktop/src-tauri/target/release/bundle/macos/KN-IG Console.app`
+- `desktop/src-tauri/target/release/bundle/dmg/KN-IG Console_<v>_aarch64.dmg`
 
+Universal 빌드: `rustup target add x86_64-apple-darwin` 후 `npm run tauri build -- --target universal-apple-darwin`.
+
+### 로컬 설치 / 갱신
+처음은 dmg 마운트 → 드래그. 갱신:
 ```bash
-# Frontend/
-npx tailwindcss -i tailwind.input.css -o public/assets/tailwind.css --watch
+cd desktop && npm run tauri build
+osascript -e 'tell application "KN-IG Console" to quit' 2>/dev/null
+rm -rf "/Applications/KN-IG Console.app"
+cp -R "src-tauri/target/release/bundle/macos/KN-IG Console.app" /Applications/
+open "/Applications/KN-IG Console.app"
 ```
 
-## 데스크톱 셸
+## 빌드별 설정 — `public/config.js`
 
-`desktop/`은 위 `public/`을 그대로 wrap하는 Tauri 2 프로젝트. 자체 빌드 절차는 `desktop/README.md` 참고.
+각 Mirror Server(=고객 사이트)별 설정 단일 출처. UI에서 수정 불가, 빌드 직전 직접 편집.
+
+```js
+window.IG_CONFIG = {
+    backendUrl: "http://192.168.64.10:8080",  // 그 사이트의 Mirror Server URL
+};
+```
+
+- 다른 자산보다 먼저 로드되어 `window.IG_CONFIG`로 전역 노출.
+- 빈 값/도달 실패 → 콘솔이 `Connection error` 화면 + Retry 버튼.
+- 고객별 빌드는 `customer/<name>` 브랜치에서 `backendUrl` 수정 → `npm run tauri build`.
+
+## 인증 & 데이터 흐름
+
+상태 머신: `load → /auth/status → { setup | login | locked | config-error } → /index.html`
+
+| Mirror Server endpoint | 응답 |
+|---|---|
+| `GET  /auth/status` | `{ state: 'unconfigured' \| 'configured' \| 'locked' }` |
+| `POST /auth/setup`  | `{ pin }` → `201 { token }` (최초 1회) |
+| `POST /auth/login`  | `{ pin }` → `200 { token }` |
+
+- PIN 4–8자리 숫자, bcrypt 저장.
+- 잠금: 10회 연속 실패 → 5분.
+- 토큰: `localStorage["ig.session.token"]` → 모든 `/api/*` 호출에 `Authorization: Bearer ...`.
+- 401 응답 또는 토큰 부재 → `login.html` 자동 리다이렉트.
+
+대시보드는 5초 주기로 `Api.refresh()` → `/api/agents`, `/api/events?limit=200` 동시 fetch → 캐시 갱신 → 다시 렌더. Backend PascalCase → UI camelCase 정규화는 `normalizeAgent` / `normalizeEvent`. EventType 매핑: `MODIFY/DELETE/CREATE/...` → 과거형 `MODIFIED/DELETED/...`.
+
+## 배포 시 추가 작업
+
+| 항목 | 내용 |
+|---|---|
+| 코드 서명 | Apple Developer ID + `tauri.conf.json::bundle.macOS.signingIdentity` |
+| 공증 | `xcrun notarytool submit` → `xcrun stapler staple` |
+| 자동 업데이트 | [Tauri Updater](https://v2.tauri.app/plugin/updater/) — 매니페스트 호스팅 필요 |
+| 고객별 URL | `public/config.js::backendUrl` 수정 후 빌드 |
+| (향후) mTLS | 콘솔 ↔ Mirror Server 간 클라이언트 인증서 |
+
+미서명 dmg 사내 배포 시 Gatekeeper 회피:
+```bash
+xattr -d com.apple.quarantine "/Applications/KN-IG Console.app"
+```

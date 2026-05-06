@@ -26,13 +26,14 @@ const Theme = {
 const App = {
     currentPage: 1,
     perPage: 10,
+    refreshIntervalMs: 5000,
 
-    init() {
+    async init() {
         Theme.init();
 
-        const agents = Api.getAgents();
-        UI.renderAgents(agents);
-        this.renderFilteredEvents();
+        await this.refreshAndRender();
+        // 주기적으로 Mirror Server 데이터 동기화
+        setInterval(() => this.refreshAndRender().catch(err => console.error("refresh failed", err)), this.refreshIntervalMs);
 
         document.getElementById("search-path").addEventListener("input", () => this.resetAndRender());
 
@@ -47,6 +48,26 @@ const App = {
         });
 
         document.getElementById("report-print").addEventListener("click", () => window.print());
+    },
+
+    async refreshAndRender() {
+        try {
+            await Api.refresh();
+            this.setConnectionStatus(true);
+        } catch (err) {
+            console.error("Api.refresh failed:", err);
+            this.setConnectionStatus(false);
+        }
+        UI.renderAgents(Api.getAgents());
+        this.renderFilteredEvents();
+    },
+
+    setConnectionStatus(ok) {
+        const dot = document.getElementById("connection-dot");
+        const label = document.getElementById("connection-label");
+        if (!dot || !label) return;
+        dot.className = `w-2 h-2 rounded-full ${ok ? "bg-green-500" : "bg-red-500"}`;
+        label.textContent = ok ? "Connected" : "Disconnected";
     },
 
     async handleReportButton(e) {

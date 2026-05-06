@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IG Console — Login</title>
+    <link rel="icon" type="image/png" sizes="any" href="assets/images/kn.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = { darkMode: 'class' };
@@ -18,15 +19,26 @@
         <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
 
             <div class="px-6 pt-8 pb-2 flex flex-col items-center gap-2">
-                <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
-                    IG
-                </div>
+                <img src="assets/images/kn.png" alt="KN-IG" class="w-12 h-12 rounded-full object-cover">
                 <h1 id="title" class="text-xl font-semibold text-gray-900 dark:text-white">
                     Loading...
                 </h1>
                 <p id="subtitle" class="text-sm text-gray-500 dark:text-gray-400 text-center">
                     Connecting to console...
                 </p>
+            </div>
+
+            <div id="config-error" class="px-6 pt-4 pb-6 flex flex-col gap-3 hidden">
+                <p id="config-error-msg" class="text-sm text-red-600 dark:text-red-400 text-center">
+                    Cannot reach Mirror Server.
+                </p>
+                <button
+                    id="config-retry"
+                    type="button"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                >
+                    Retry
+                </button>
             </div>
 
             <form id="auth-form" class="px-6 pt-4 pb-6 flex flex-col gap-4 hidden">
@@ -85,14 +97,14 @@
             </div>
         </div>
 
-        <div class="mt-6 flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
-            <span id="server-info">—</span>
+        <div class="mt-6 flex items-center justify-end text-xs text-gray-400 dark:text-gray-500">
             <button id="theme-toggle" class="hover:text-gray-600 dark:hover:text-gray-300">
                 Toggle theme
             </button>
         </div>
     </main>
 
+    <script src="config.js"></script>
     <script src="js/auth.js"></script>
 </body>
 </html>

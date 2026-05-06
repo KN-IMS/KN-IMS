@@ -1,60 +1,86 @@
 // Auth flow for IG Console
-// State machine: loading -> { setup | login | locked } -> success -> redirect to index.html
 //
-// Backend integration (TODO): replace MockAuthApi with real Mirror Server calls.
-//   GET  /auth/status   -> { state: 'unconfigured' | 'configured' | 'locked' }
-//   POST /auth/setup    -> { token } body: { pin }
-//   POST /auth/login    -> { token } body: { pin }
+// Mirror Server URL은 빌드 시 박힌 config.js의 IG_CONFIG.backendUrl을 절대 출처로 사용.
+// 사용자 측에서 URL을 변경할 수 없음 — 미설정/도달 실패 시 config-error 화면(재시도 버튼).
+//
+// 상태 머신: load → /auth/status → { setup | login | locked } → success → /index.html
+//
+// Mirror Server endpoints:
+//   GET  /auth/status   → { state: 'unconfigured' | 'configured' | 'locked' }
+//   POST /auth/setup    body { pin } → 201 { token }
+//   POST /auth/login    body { pin } → 200 { token }
 
 const TOKEN_KEY = 'ig.session.token';
-const MOCK_PIN_KEY = 'ig.mock.pin';
 
-const MockAuthApi = {
+function getBackendURL() {
+    return ((window.IG_CONFIG && window.IG_CONFIG.backendUrl) || '').replace(/\/+$/, '');
+}
+
+async function authFetch(path, opts = {}) {
+    const base = getBackendURL();
+    if (!base) throw new Error('backend URL not configured');
+    const res = await fetch(base + path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    return res;
+}
+
+const Auth = {
     async getStatus() {
-        await delay(150);
-        const stored = localStorage.getItem(MOCK_PIN_KEY);
-        return { state: stored ? 'configured' : 'unconfigured' };
+        const res = await authFetch('/auth/status');
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        return res.json();
     },
 
     async setup(pin) {
-        await delay(200);
-        localStorage.setItem(MOCK_PIN_KEY, pin);
-        return { token: 'mock-token-' + Date.now() };
+        const res = await authFetch('/auth/setup', {
+            method: 'POST',
+            body: JSON.stringify({ pin }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            const err = new Error(body.error || `status ${res.status}`);
+            err.status = res.status;
+            throw err;
+        }
+        return res.json();
     },
 
     async login(pin) {
-        await delay(200);
-        const stored = localStorage.getItem(MOCK_PIN_KEY);
-        if (stored !== pin) {
-            const err = new Error('Invalid PIN');
-            err.code = 'invalid_pin';
+        const res = await authFetch('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ pin }),
+        });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            const err = new Error(body.error || `status ${res.status}`);
+            err.status = res.status;
+            if (res.status === 401) err.code = 'invalid_pin';
+            else if (res.status === 423) err.code = 'locked';
             throw err;
         }
-        return { token: 'mock-token-' + Date.now() };
+        return res.json();
     },
 };
 
-const Auth = MockAuthApi;
-
 const els = {
-    title: document.getElementById('title'),
-    subtitle: document.getElementById('subtitle'),
-    form: document.getElementById('auth-form'),
-    pin: document.getElementById('pin-input'),
-    confirmWrap: document.getElementById('confirm-wrap'),
-    confirm: document.getElementById('pin-confirm'),
-    error: document.getElementById('error-msg'),
-    submit: document.getElementById('submit-btn'),
-    locked: document.getElementById('locked-msg'),
-    serverInfo: document.getElementById('server-info'),
-    themeToggle: document.getElementById('theme-toggle'),
+    title:        document.getElementById('title'),
+    subtitle:     document.getElementById('subtitle'),
+    form:         document.getElementById('auth-form'),
+    pin:          document.getElementById('pin-input'),
+    confirmWrap:  document.getElementById('confirm-wrap'),
+    confirm:      document.getElementById('pin-confirm'),
+    error:        document.getElementById('error-msg'),
+    submit:       document.getElementById('submit-btn'),
+    locked:       document.getElementById('locked-msg'),
+    configError:  document.getElementById('config-error'),
+    configErrMsg: document.getElementById('config-error-msg'),
+    configRetry:  document.getElementById('config-retry'),
+    themeToggle:  document.getElementById('theme-toggle'),
 };
 
 let mode = 'login';
-
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 function showError(msg) {
     els.error.textContent = msg;
@@ -70,7 +96,23 @@ function isValidPin(pin) {
     return /^[0-9]{4,8}$/.test(pin);
 }
 
+function hideAllPanels() {
+    els.form.classList.add('hidden');
+    els.locked.classList.add('hidden');
+    els.configError.classList.add('hidden');
+}
+
+function showConfigError(msg) {
+    hideAllPanels();
+    els.title.textContent = 'Connection error';
+    els.subtitle.textContent = '';
+    els.configErrMsg.textContent = msg;
+    els.configError.classList.remove('hidden');
+}
+
 function renderMode(state) {
+    hideAllPanels();
+
     if (state === 'locked') {
         els.locked.classList.remove('hidden');
         els.title.textContent = 'Locked';
@@ -107,8 +149,8 @@ async function handleSubmit(e) {
     }
 
     if (mode === 'setup') {
-        const confirm = els.confirm.value.trim();
-        if (pin !== confirm) {
+        const confirmPin = els.confirm.value.trim();
+        if (pin !== confirmPin) {
             showError('PINs do not match.');
             return;
         }
@@ -124,10 +166,13 @@ async function handleSubmit(e) {
     } catch (err) {
         if (err.code === 'invalid_pin') {
             showError('Invalid PIN.');
+        } else if (err.code === 'locked') {
+            renderMode('locked');
         } else {
-            showError('Server error. Try again.');
+            showError(err.message || 'Server error. Try again.');
         }
         els.pin.value = '';
+        if (els.confirm) els.confirm.value = '';
         els.pin.focus();
     } finally {
         els.submit.disabled = false;
@@ -141,24 +186,31 @@ function setupTheme() {
     });
 }
 
-async function init() {
-    setupTheme();
-    els.form.addEventListener('submit', handleSubmit);
-
-    if (localStorage.getItem(TOKEN_KEY)) {
-        window.location.href = 'index.html';
+async function loadStatusAndRender() {
+    if (!getBackendURL()) {
+        showConfigError('Console build is not configured. Contact your administrator.');
         return;
     }
 
     try {
         const { state } = await Auth.getStatus();
         renderMode(state);
-        els.serverInfo.textContent = 'Connected';
     } catch (err) {
-        els.title.textContent = 'Connection error';
-        els.subtitle.textContent = 'Could not reach server.';
-        els.serverInfo.textContent = 'Disconnected';
+        showConfigError('Cannot reach Mirror Server. Check your network and retry.');
     }
+}
+
+async function init() {
+    setupTheme();
+    els.form.addEventListener('submit', handleSubmit);
+    els.configRetry.addEventListener('click', loadStatusAndRender);
+
+    if (localStorage.getItem(TOKEN_KEY)) {
+        window.location.href = 'index.html';
+        return;
+    }
+
+    await loadStatusAndRender();
 }
 
 init();
