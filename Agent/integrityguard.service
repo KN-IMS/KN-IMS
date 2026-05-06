@@ -6,6 +6,7 @@ Wants=network.target
 
 [Service]
 Type=notify
+EnvironmentFile=/etc/ig_monitor/ig.env
 ExecStart=/usr/local/bin/agent -f -c /etc/ig_monitor/ig.conf
 Restart=on-failure
 RestartSec=5s
