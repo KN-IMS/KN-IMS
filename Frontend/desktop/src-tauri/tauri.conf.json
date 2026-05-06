@@ -11,11 +11,13 @@
     "windows": [
       {
         "title": "KN-IG Console",
-        "width": 1440,
-        "height": 900,
-        "minWidth": 1024,
-        "minHeight": 720,
-        "resizable": true
+        "width": 360,
+        "height": 460,
+        "minWidth": 360,
+        "minHeight": 460,
+        "resizable": false,
+        "center": true,
+        "backgroundColor": "#ffffff"
       }
     ],
     "security": {

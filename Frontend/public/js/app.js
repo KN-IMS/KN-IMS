@@ -66,7 +66,14 @@ const App = {
         const dot = document.getElementById("connection-dot");
         const label = document.getElementById("connection-label");
         if (!dot || !label) return;
-        dot.className = `w-2 h-2 rounded-full ${ok ? "bg-green-500" : "bg-red-500"}`;
+        // 빌드된 tailwind.css에 없는 클래스(bg-green-500 등)를 피해 inline style 사용
+        if (ok) {
+            dot.style.backgroundColor = "#22c55e"; // green-500
+            dot.style.boxShadow = "0 0 8px rgba(34,197,94,0.9)";
+        } else {
+            dot.style.backgroundColor = "#ef4444"; // red-500
+            dot.style.boxShadow = "0 0 8px rgba(239,68,68,0.9)";
+        }
         label.textContent = ok ? "Connected" : "Disconnected";
     },
 

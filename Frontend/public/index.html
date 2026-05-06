@@ -11,6 +11,11 @@
             location.replace('login.html');
         }
     </script>
+    <script src="js/window-size.js"></script>
+    <script>
+        // 진입 즉시 큰 창으로 확장 (login.html에서 작은 창으로 줄어든 상태일 수 있음)
+        TauriWin.setMainSize();
+    </script>
     <link rel="stylesheet" href="assets/tailwind.css">
     <style>
         @page {
@@ -114,8 +119,9 @@
                 </button>
             </div>
             <script>
-                document.getElementById('logout-btn').addEventListener('click', () => {
+                document.getElementById('logout-btn').addEventListener('click', async () => {
                     localStorage.removeItem('ig.session.token');
+                    await TauriWin.setLoginSize();
                     location.href = 'login.html';
                 });
             </script>

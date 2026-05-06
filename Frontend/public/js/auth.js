@@ -77,7 +77,7 @@ const els = {
     configError:  document.getElementById('config-error'),
     configErrMsg: document.getElementById('config-error-msg'),
     configRetry:  document.getElementById('config-retry'),
-    themeToggle:  document.getElementById('theme-toggle'),
+    helper:       document.getElementById('pin-helper'),
 };
 
 let mode = 'login';
@@ -127,11 +127,17 @@ function renderMode(state) {
         els.subtitle.textContent = 'Choose a PIN for first-time login.';
         els.confirmWrap.classList.remove('hidden');
         els.submit.textContent = 'Create PIN';
+        els.pin.placeholder = '••••';
+        els.confirm.placeholder = '••••';
+        els.helper.classList.remove('hidden');
     } else {
         els.title.textContent = 'Login';
         els.subtitle.textContent = 'Enter your PIN to continue.';
         els.confirmWrap.classList.add('hidden');
         els.submit.textContent = 'Login';
+        els.pin.placeholder = '';
+        els.confirm.placeholder = '';
+        els.helper.classList.add('hidden');
     }
 
     els.form.classList.remove('hidden');
@@ -162,6 +168,7 @@ async function handleSubmit(e) {
             ? await Auth.setup(pin)
             : await Auth.login(pin);
         localStorage.setItem(TOKEN_KEY, res.token);
+        await TauriWin.setMainSize();
         window.location.href = 'index.html';
     } catch (err) {
         if (err.code === 'invalid_pin') {
@@ -179,13 +186,6 @@ async function handleSubmit(e) {
     }
 }
 
-function setupTheme() {
-    els.themeToggle.addEventListener('click', () => {
-        const isDark = document.documentElement.classList.toggle('dark');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    });
-}
-
 async function loadStatusAndRender() {
     if (!getBackendURL()) {
         showConfigError('Console build is not configured. Contact your administrator.');
@@ -201,15 +201,16 @@ async function loadStatusAndRender() {
 }
 
 async function init() {
-    setupTheme();
     els.form.addEventListener('submit', handleSubmit);
     els.configRetry.addEventListener('click', loadStatusAndRender);
 
     if (localStorage.getItem(TOKEN_KEY)) {
+        await TauriWin.setMainSize();
         window.location.href = 'index.html';
         return;
     }
 
+    await TauriWin.setLoginSize();
     await loadStatusAndRender();
 }
 
