@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IG Console — Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' };
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center transition-colors">
+
+    <main class="w-full max-w-sm px-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+
+            <div class="px-6 pt-8 pb-2 flex flex-col items-center gap-2">
+                <div class="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                    IG
+                </div>
+                <h1 id="title" class="text-xl font-semibold text-gray-900 dark:text-white">
+                    Loading...
+                </h1>
+                <p id="subtitle" class="text-sm text-gray-500 dark:text-gray-400 text-center">
+                    Connecting to console...
+                </p>
+            </div>
+
+            <form id="auth-form" class="px-6 pt-4 pb-6 flex flex-col gap-4 hidden">
+                <div>
+                    <label for="pin-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        PIN
+                    </label>
+                    <input
+                        id="pin-input"
+                        type="password"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        autofocus
+                        maxlength="8"
+                        pattern="[0-9]{4,8}"
+                        class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-base bg-white dark:bg-gray-700 dark:text-white tracking-widest text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="••••"
+                    >
+                </div>
+
+                <div id="confirm-wrap" class="hidden">
+                    <label for="pin-confirm" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Confirm PIN
+                    </label>
+                    <input
+                        id="pin-confirm"
+                        type="password"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        maxlength="8"
+                        pattern="[0-9]{4,8}"
+                        class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-base bg-white dark:bg-gray-700 dark:text-white tracking-widest text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="••••"
+                    >
+                </div>
+
+                <p id="error-msg" class="text-sm text-red-600 dark:text-red-400 hidden"></p>
+
+                <button
+                    id="submit-btn"
+                    type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                    Continue
+                </button>
+
+                <p class="text-xs text-gray-400 dark:text-gray-500 text-center">
+                    PIN must be 4–8 digits.
+                </p>
+            </form>
+
+            <div id="locked-msg" class="px-6 pt-4 pb-8 hidden">
+                <p class="text-sm text-red-600 dark:text-red-400 text-center">
+                    Console is locked. Try again later.
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+            <span id="server-info">—</span>
+            <button id="theme-toggle" class="hover:text-gray-600 dark:hover:text-gray-300">
+                Toggle theme
+            </button>
+        </div>
+    </main>
+
+    <script src="js/auth.js"></script>
+</body>
+</html>
