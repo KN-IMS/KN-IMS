@@ -24,6 +24,7 @@ func main() {
 	caCert := envOr("TLS_CA", "./certs/ca.crt")
 	serverCert := envOr("TLS_CERT", "./certs/server.crt")
 	serverKey := envOr("TLS_KEY", "./certs/server.key")
+	mode := envOr("IG_MODE", "mirror") // mirror | central
 
 	agentStore := store.NewMySQLAgentStore(db.Conn)
 	eventStore := store.NewMySQLEventStore(db.Conn)
@@ -47,7 +48,16 @@ func main() {
 		processor.Process,
 	)
 
-	server := api.NewServer(agentStore, eventStore, alertStore, publisher)
+	var auth *api.MirrorAuth
+	if mode == "mirror" {
+		authStore := store.NewMySQLAuthStore(db.Conn)
+		auth = api.NewMirrorAuth(authStore)
+		log.Println("Mirror 모드: 콘솔 PIN 인증 활성")
+	} else {
+		log.Printf("Central 모드: 콘솔 PIN 인증 비활성 (IG_MODE=%s)", mode)
+	}
+
+	server := api.NewServer(agentStore, eventStore, alertStore, publisher, auth)
 
 	errCh := make(chan error, 2)
 
