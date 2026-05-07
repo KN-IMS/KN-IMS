@@ -28,7 +28,7 @@ static int visited_check_add(visited_set_t *vs, ino_t ino) {
 }
 
 static int walk_impl(const char *path, int recursive,
-                     fim_walk_cb cb, void *userdata,
+                     ig_walk_cb cb, void *userdata,
                      visited_set_t *vs, int depth)
 {
     if (depth > WALK_MAX_DEPTH) return 0;
@@ -48,7 +48,7 @@ static int walk_impl(const char *path, int recursive,
 
     DIR *dir = opendir(path);
     if (!dir) {
-        LOG_WARN_FIM("[walker] opendir 실패: %s (%s)", path, strerror(errno));
+        LOG_WARN_IG("[walker] opendir 실패: %s (%s)", path, strerror(errno));
         return 0;
     }
 
@@ -60,7 +60,7 @@ static int walk_impl(const char *path, int recursive,
              (entry->d_name[1] == '.' && entry->d_name[2] == '\0')))
             continue;
 
-        char sub[FIM_MAX_PATH];
+        char sub[IG_MAX_PATH];
         if (snprintf(sub, sizeof(sub), "%s/%s", path, entry->d_name)
                 >= (int)sizeof(sub))
             continue;  /* 경로 너무 김 */
@@ -80,11 +80,11 @@ static int walk_impl(const char *path, int recursive,
     return count;
 }
 
-int fim_walk(const char *base, int recursive, fim_walk_cb cb, void *userdata) {
+int ig_walk(const char *base, int recursive, ig_walk_cb cb, void *userdata) {
     /* trailing slash 정규화 — baseline 경로가 inotify 이벤트 경로와 일치하도록 */
-    char nbase[FIM_MAX_PATH];
-    strncpy(nbase, base, FIM_MAX_PATH - 1);
-    nbase[FIM_MAX_PATH - 1] = '\0';
+    char nbase[IG_MAX_PATH];
+    strncpy(nbase, base, IG_MAX_PATH - 1);
+    nbase[IG_MAX_PATH - 1] = '\0';
     size_t plen = strlen(nbase);
     while (plen > 1 && nbase[plen - 1] == '/') nbase[--plen] = '\0';
 

@@ -1,0 +1,24 @@
+[Unit]
+Description=IntegrityGuard Agent
+Documentation=https://github.com/KN-IG/KN-IG
+After=network.target
+Wants=network.target
+
+[Service]
+Type=notify
+EnvironmentFile=/etc/ig_monitor/ig.env
+ExecStart=/usr/local/bin/agent -f -c /etc/ig_monitor/ig.conf
+Restart=on-failure
+RestartSec=5s
+WatchdogSec=30s
+TimeoutStopSec=10s
+User=root
+KillMode=control-group
+
+# 보안 강화
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/run /var/log
+
+[Install]
+WantedBy=multi-user.target

@@ -27,6 +27,7 @@ logs/
 
 # Claude
 .claude/
+.omc/
 
 # Misc
 *.pdf

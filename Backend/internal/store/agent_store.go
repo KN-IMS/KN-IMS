@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/KGU-FIMS/Backend/internal"
+	"github.com/KN-IG/KN-IG/Backend/internal"
 )
 
 // MySQLAgentStore : AgentStore 인터페이스의 MySQL 구현체
@@ -23,7 +23,13 @@ func (s *MySQLAgentStore) RegisterAgent(ctx context.Context, agentID string, p i
 	query := `
 		INSERT INTO agents (agent_id, hostname, ip, version, os, monitor_type, status, registered_at, last_seen)
 		VALUES (?, ?, ?, '', ?, ?, 'online', NOW(), NOW())
-		ON DUPLICATE KEY UPDATE last_seen = NOW(), status = 'online'`
+		ON DUPLICATE KEY UPDATE
+			hostname = VALUES(hostname),
+			ip = VALUES(ip),
+			os = VALUES(os),
+			monitor_type = VALUES(monitor_type),
+			last_seen = NOW(),
+			status = 'online'`
 
 	_, err := s.db.ExecContext(ctx, query, agentID, p.Hostname, p.IP, p.OS, p.MonitorType)
 	return err

@@ -1,4 +1,4 @@
-name: fim-agent CI
+name: agent CI
 
 on:
   push:
@@ -28,5 +28,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fim_agent
-          path: build/fim_agent
+          name: agent
+          path: build/agent

@@ -80,7 +80,7 @@ int daemon_start(int foreground)
     umask(0027);
 
     if (foreground) {
-        openlog("fim-agent", LOG_PID | LOG_PERROR, LOG_DAEMON);
+        openlog("agent", LOG_PID | LOG_PERROR, LOG_DAEMON);
         syslog(LOG_INFO, "starting in foreground mode");
         return 0;
     }
@@ -130,7 +130,7 @@ int daemon_start(int foreground)
     if (devnull > STDERR_FILENO) close(devnull);
 
     /* ⑧ syslog 초기화 — 반드시 데몬화 이후에 */
-    openlog("fim-agent", LOG_PID | LOG_NDELAY, LOG_DAEMON);
+    openlog("agent", LOG_PID | LOG_NDELAY, LOG_DAEMON);
     return 0;
 }
 
@@ -147,7 +147,7 @@ int daemon_need_reload(void)
 /* ── graceful shutdown ───────────────────────────────────────*/
 void daemon_cleanup(void)
 {
-    syslog(LOG_INFO, "fim-agent stopped (PID %d)", getpid());
+    syslog(LOG_INFO, "agent stopped (PID %d)", getpid());
     closelog();
 }
 

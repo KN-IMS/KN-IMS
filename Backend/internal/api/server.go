@@ -3,40 +3,34 @@ package api
 import (
 	"log"
 
+	"github.com/KN-IG/KN-IG/Backend/internal"
 	"github.com/gin-gonic/gin"
-	"github.com/KGU-FIMS/Backend/internal"
 )
 
 // Server : REST API 서버
 type Server struct {
-	router        *gin.Engine
-	agentStore    internal.AgentStore
-	eventStore    internal.EventStore
-	scanStore     internal.ScanStore
-	alertStore    internal.AlertStore
-	publisher     internal.EventPublisher
-	commandSender internal.CommandSender
+	router     *gin.Engine
+	agentStore internal.AgentStore
+	eventStore internal.EventStore
+	alertStore internal.AlertStore
+	publisher  internal.EventPublisher
 }
 
 // NewServer : 서버 생성
 func NewServer(
 	agentStore internal.AgentStore,
 	eventStore internal.EventStore,
-	scanStore internal.ScanStore,
 	alertStore internal.AlertStore,
 	publisher internal.EventPublisher,
-	commandSender internal.CommandSender,
 ) *Server {
 	router := gin.Default()
 
 	s := &Server{
-		router:        router,
-		agentStore:    agentStore,
-		eventStore:    eventStore,
-		scanStore:     scanStore,
-		alertStore:    alertStore,
-		publisher:     publisher,
-		commandSender: commandSender,
+		router:     router,
+		agentStore: agentStore,
+		eventStore: eventStore,
+		alertStore: alertStore,
+		publisher:  publisher,
 	}
 
 	s.registerRoutes()
@@ -58,19 +52,13 @@ func (s *Server) registerRoutes() {
 	api.GET("/events", s.handleQueryEvents)
 	api.GET("/events/stream", s.handleSSE)
 
-	// Command API
-	api.POST("/agents/:id/baseline", s.handleCreateBaseline)
-	api.POST("/agents/:id/scan", s.handleIntegrityScan)
-
 	// Alert API
 	api.GET("/alerts", s.handleListAlerts)
 	api.PATCH("/alerts/:id/resolve", s.handleResolveAlert)
 }
 
 // Start : 서버 시작
-func (s *Server) Start(addr string) {
+func (s *Server) Start(addr string) error {
 	log.Printf("HTTP 서버 시작: %s", addr)
-	if err := s.router.Run(addr); err != nil {
-		log.Fatalf("서버 시작 실패: %v", err)
-	}
+	return s.router.Run(addr)
 }
