@@ -14,16 +14,19 @@ type Server struct {
 	eventStore internal.EventStore
 	alertStore internal.AlertStore
 	publisher  internal.EventPublisher
+	auth       *MirrorAuth // nil이면 인증 비활성 (central 모드)
 }
 
-// NewServer : 서버 생성
+// NewServer : 서버 생성. auth가 nil이면 /auth/* 미등록, /api/* 미들웨어 미적용.
 func NewServer(
 	agentStore internal.AgentStore,
 	eventStore internal.EventStore,
 	alertStore internal.AlertStore,
 	publisher internal.EventPublisher,
+	auth *MirrorAuth,
 ) *Server {
 	router := gin.Default()
+	router.Use(corsMiddleware())
 
 	s := &Server{
 		router:     router,
@@ -31,6 +34,7 @@ func NewServer(
 		eventStore: eventStore,
 		alertStore: alertStore,
 		publisher:  publisher,
+		auth:       auth,
 	}
 
 	s.registerRoutes()
@@ -40,7 +44,18 @@ func NewServer(
 
 // registerRoutes : API 엔드포인트 등록
 func (s *Server) registerRoutes() {
+	if s.auth != nil {
+		// Mirror 모드: 인증 endpoint (자체적으로 인증 불필요)
+		authGrp := s.router.Group("/auth")
+		authGrp.GET("/status", s.auth.Status)
+		authGrp.POST("/setup", s.auth.Setup)
+		authGrp.POST("/login", s.auth.Login)
+	}
+
 	api := s.router.Group("/api")
+	if s.auth != nil {
+		api.Use(s.auth.Authorize)
+	}
 
 	// Agent API
 	api.GET("/agents", s.handleListAgents)
@@ -55,6 +70,20 @@ func (s *Server) registerRoutes() {
 	// Alert API
 	api.GET("/alerts", s.handleListAlerts)
 	api.PATCH("/alerts/:id/resolve", s.handleResolveAlert)
+}
+
+// corsMiddleware : Tauri 콘솔(별 origin)이 직접 호출 가능하도록 허용.
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	}
 }
 
 // Start : 서버 시작

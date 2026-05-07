@@ -146,3 +146,12 @@ type AlertStore interface {
 	// ResolveAlert : PATCH /api/alerts/:id/resolve -> 알림 해결 처리
 	ResolveAlert(ctx context.Context, alertID int64) error
 }
+
+// AuthStore : Mirror 모드 콘솔 PIN 해시 저장 (singleton row)
+// 구현 : internal/store/auth_store.go
+type AuthStore interface {
+	// GetPINHash : 현재 PIN 해시. 미설정 시 ""(nil err) 반환.
+	GetPINHash(ctx context.Context) (string, error)
+	// SetPINHash : PIN 해시 upsert (id=1 단일 행)
+	SetPINHash(ctx context.Context, hash string) error
+}
