@@ -505,6 +505,10 @@ int ig_tcp_send_event(ig_tcp_client_t *cli, const ig_event_t *ev)
     msg.detected_by = map_source(ev->source);
     msg.pid = (uint32_t)ev->pid;
     msg.timestamp = (uint32_t)ev->timestamp;
+    msg.target_dev = ev->dev;
+    msg.target_ino = ev->ino;
+    msg.blocked    = (uint8_t)(ev->blocked ? 1 : 0);
+    msg.chain      = (ig_pid_chain_t *)&ev->chain;   /* not owned */
 
     if (msg.detected_by == 0) {
         syslog(LOG_WARNING, "ig-tcp: 지원하지 않는 이벤트 source=%d — FILE_EVENT 전송 생략",
@@ -512,7 +516,8 @@ int ig_tcp_send_event(ig_tcp_client_t *cli, const ig_event_t *ev)
         return 0;
     }
 
-    uint8_t buf[8192];
+    /* chain 16 entry × ~860B = ~14KB max → 64KB 프레임 한도 안에서 충분 */
+    static __thread uint8_t buf[IG_MAX_PAYLOAD];
     int len = ig_file_event_encode(&msg, buf, sizeof(buf));
     if (len < 0) {
         syslog(LOG_ERR, "ig-tcp: FILE_EVENT 직렬화 실패");

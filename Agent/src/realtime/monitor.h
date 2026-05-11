@@ -50,17 +50,30 @@ typedef enum {
 } ig_event_source_t;
 
 /* ── 이벤트 구조체 ─────────────────────────────── */
+/*
+ * chain은 별도 헤더에 정의된 ig_pid_chain_t 사용.
+ * 큐 memcpy 비용 줄이려고 헤더 분리 + 임베드 by value.
+ * sizeof(ig_event_t) ≈ 17KB — 큐 512슬롯 시 ~8.5MB.
+ */
+#include "../scanner/pid_ancestry.h"
+
 typedef struct {
     ig_event_type_t   type;
     ig_event_source_t source;
     char               path[IG_MAX_PATH];
     char               filename[256];
     time_t             timestamp;
-    /* who-data: eBPF 보강 시 채워짐. eBPF 미사용 시 0/"" */
-    pid_t              pid;        /* 변경 유발 PID  (eBPF) */
-    uid_t              uid;        /* 변경 유발 UID  (eBPF) */
-    pid_t              sid;        /* 세션 ID        (eBPF) */
-    char               comm[16];  /* 프로세스 이름  (eBPF) */
+    /* target inode 식별 — LKM/eBPF에서 채움 */
+    uint64_t           dev;        /* kernel-encoded dev_t (major<<20)|minor */
+    uint64_t           ino;
+    int                blocked;    /* 1 = 차단됨, 0 = audit only */
+    /* actor 빠른 접근용 (chain.chain[0]과 동일). eBPF/LKM 미사용 시 0/"" */
+    pid_t              pid;
+    uid_t              uid;
+    pid_t              sid;
+    char               comm[16];
+    /* 프로세스 계보 — depth==0 이면 chain 없음 */
+    ig_pid_chain_t     chain;
 } ig_event_t;
 
 /* ── 스레드 안전 이벤트 큐 ─────────────────────── */

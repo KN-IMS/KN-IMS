@@ -97,6 +97,29 @@ struct {
     __type(value, __u64);
 } hook_stats SEC(".maps");
 
+/* fork-time process cache — race-free chain reconstruction
+ * BPF 스택 512B 제약 → entry는 compact (~200B)
+ * exe는 d_path 비싸므로 생략, 유저측 /proc fallback */
+struct ig_proc_entry {
+    __u32 pid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 euid;
+    __u32 sid;
+    __u32 _pad;
+    char  comm[16];
+    char  tty[16];
+    __u64 start_time_ns;
+    char  cmdline[160];
+};
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 8192);
+    __type(key, __u32);
+    __type(value, struct ig_proc_entry);
+} proc_map SEC(".maps");
+
 static __always_inline void count_hook(__u32 hook_id)
 {
     __u64 *value = bpf_map_lookup_elem(&hook_stats, &hook_id);
@@ -301,6 +324,106 @@ int BPF_PROG(check_inode_setattr, struct dentry *dentry, struct iattr *attr, int
         return 0;
 
     return audit_inode(inode, op_mask, IG_HOOK_INODE_SETATTR);
+}
+
+/* ── fork-time process tree — sched_process_{fork,exec,exit} ───────── */
+
+static __always_inline void
+fill_entry_from_task(struct task_struct *t, struct ig_proc_entry *e)
+{
+    struct task_struct *parent;
+    struct signal_struct *sig;
+
+    e->pid  = BPF_CORE_READ(t, tgid);
+    parent  = BPF_CORE_READ(t, real_parent);
+    e->ppid = parent ? BPF_CORE_READ(parent, tgid) : 0;
+    e->uid  = BPF_CORE_READ(t, cred, uid.val);
+    e->euid = BPF_CORE_READ(t, cred, euid.val);
+    sig     = BPF_CORE_READ(t, signal);
+    e->sid  = sig ? BPF_CORE_READ(sig, pids[PIDTYPE_SID], numbers[0].nr) : 0;
+    e->start_time_ns = BPF_CORE_READ(t, start_boottime);
+    bpf_probe_read_kernel_str(e->comm, sizeof(e->comm), BPF_CORE_READ(t, comm));
+    /* tty: signal->tty->name */
+    {
+        struct tty_struct *tty = sig ? BPF_CORE_READ(sig, tty) : NULL;
+        if (tty) {
+            const char *name = BPF_CORE_READ(tty, name);
+            if (name) bpf_probe_read_kernel_str(e->tty, sizeof(e->tty), name);
+            else      e->tty[0] = '\0';
+        } else {
+            e->tty[0] = '\0';
+        }
+    }
+    e->cmdline[0] = '\0';   /* exec에서 채움 */
+}
+
+SEC("tp_btf/sched_process_fork")
+int BPF_PROG(on_sched_fork, struct task_struct *parent, struct task_struct *child)
+{
+    struct ig_proc_entry e = {};
+    __u32 key;
+
+    if (!child) return 0;
+    fill_entry_from_task(child, &e);
+    key = e.pid;
+    bpf_map_update_elem(&proc_map, &key, &e, BPF_ANY);
+    return 0;
+}
+
+SEC("tp_btf/sched_process_exec")
+int BPF_PROG(on_sched_exec, struct task_struct *t, pid_t old_pid,
+             struct linux_binprm *bprm)
+{
+    struct ig_proc_entry *e;
+    struct mm_struct *mm;
+    unsigned long arg_start, arg_end, len;
+    __u32 key;
+
+    if (!t) return 0;
+    key = BPF_CORE_READ(t, tgid);
+    e = bpf_map_lookup_elem(&proc_map, &key);
+    if (!e) {
+        struct ig_proc_entry tmp = {};
+        fill_entry_from_task(t, &tmp);
+        bpf_map_update_elem(&proc_map, &key, &tmp, BPF_ANY);
+        e = bpf_map_lookup_elem(&proc_map, &key);
+        if (!e) return 0;
+    }
+
+    /* exec 후 comm 갱신 */
+    bpf_probe_read_kernel_str(e->comm, sizeof(e->comm), BPF_CORE_READ(t, comm));
+
+    /* cmdline: arg_start..arg_end 를 user mem에서 읽기 */
+    mm = BPF_CORE_READ(t, mm);
+    if (!mm) return 0;
+    arg_start = BPF_CORE_READ(mm, arg_start);
+    arg_end   = BPF_CORE_READ(mm, arg_end);
+    if (arg_end <= arg_start) return 0;
+
+    len = arg_end - arg_start;
+    if (len > sizeof(e->cmdline) - 1) len = sizeof(e->cmdline) - 1;
+    bpf_probe_read_user(e->cmdline, len, (void *)arg_start);
+    e->cmdline[len] = '\0';
+    /* NUL → space */
+    {
+        unsigned int i;
+        #pragma unroll
+        for (i = 0; i < sizeof(e->cmdline) - 1; i++) {
+            if (i >= len) break;
+            if (e->cmdline[i] == '\0') e->cmdline[i] = ' ';
+        }
+    }
+    return 0;
+}
+
+SEC("tp_btf/sched_process_exit")
+int BPF_PROG(on_sched_exit, struct task_struct *t)
+{
+    __u32 key;
+    if (!t) return 0;
+    key = BPF_CORE_READ(t, tgid);
+    bpf_map_delete_elem(&proc_map, &key);
+    return 0;
 }
 
 char LICENSE[] SEC("license") = "GPL";

@@ -196,15 +196,45 @@ int ig_heartbeat_decode(const uint8_t *buf, size_t len, ig_msg_heartbeat_t *msg)
     return 13;
 }
 
+/* chain entry 1개 직렬화. 가변 문자열 4개 (comm/tty/exe/cmdline) + 고정 필드 */
+static int chain_entry_encode(const ig_proc_info_t *e,
+                                uint8_t **p, const uint8_t *end)
+{
+    /* 고정: pid(4)+ppid(4)+uid(4)+euid(4)+sid(4)+start(8) = 28 */
+    /* 가변: 4 strings × 2(len) + content */
+    size_t comm_l = strnlen(e->comm,    sizeof(e->comm));
+    size_t tty_l  = strnlen(e->tty,     sizeof(e->tty));
+    size_t exe_l  = strnlen(e->exe,     sizeof(e->exe));
+    size_t cmd_l  = strnlen(e->cmdline, sizeof(e->cmdline));
+    size_t need = 28 + 8 + comm_l + tty_l + exe_l + cmd_l;
+    if ((size_t)(end - *p) < need) return -1;
+
+    write_u32(p, (uint32_t)e->pid);
+    write_u32(p, (uint32_t)e->ppid);
+    write_u32(p, (uint32_t)e->uid);
+    write_u32(p, (uint32_t)e->euid);
+    write_u32(p, (uint32_t)e->sid);
+    write_u64(p, e->start_time_ns);
+    write_str(p, e->comm,    (uint16_t)comm_l);
+    write_str(p, e->tty,     (uint16_t)tty_l);
+    write_str(p, e->exe,     (uint16_t)exe_l);
+    write_str(p, e->cmdline, (uint16_t)cmd_l);
+    return 0;
+}
+
 int ig_file_event_encode(const ig_msg_file_event_t *msg, uint8_t *buf, size_t buf_size)
 {
-    size_t need = 8 + 1
+    /* v1 minimum */
+    size_t need_v1 = 8 + 1
         + 2 + msg->file_path_len
         + 2 + msg->file_name_len
         + 2 + 1 + 4 + 4;
-    if (need > buf_size) return -1;
+    /* v2: dev(8)+ino(8)+blocked(1)+chain_depth(1)+chain_truncated(1) */
+    size_t need_v2 = 8 + 8 + 1 + 1 + 1;
+    if (need_v1 + need_v2 > buf_size) return -1;
 
     uint8_t *p = buf;
+    const uint8_t *end = buf + buf_size;
     write_u64(&p, msg->agent_id);
     write_u8(&p, msg->event_type);
     write_str(&p, msg->file_path, msg->file_path_len);
@@ -213,6 +243,27 @@ int ig_file_event_encode(const ig_msg_file_event_t *msg, uint8_t *buf, size_t bu
     write_u8(&p, msg->detected_by);
     write_u32(&p, msg->pid);
     write_u32(&p, msg->timestamp);
+
+    /* v2 — target + chain */
+    write_u64(&p, msg->target_dev);
+    write_u64(&p, msg->target_ino);
+    write_u8(&p, msg->blocked);
+    {
+        uint8_t depth = 0, trunc = 0;
+        if (msg->chain) {
+            depth = (uint8_t)((msg->chain->depth > 255) ? 255 : msg->chain->depth);
+            trunc = (uint8_t)(msg->chain->truncated ? 1 : 0);
+        }
+        write_u8(&p, depth);
+        write_u8(&p, trunc);
+        if (msg->chain) {
+            int i;
+            for (i = 0; i < depth && i < IG_PA_MAX_DEPTH; i++) {
+                if (chain_entry_encode(&msg->chain->chain[i], &p, end) < 0)
+                    return -1;
+            }
+        }
+    }
     return (int)(p - buf);
 }
 
