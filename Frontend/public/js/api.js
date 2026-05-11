@@ -1,28 +1,79 @@
-const MOCK_AGENTS = [
-    { id: "PC_1", hostname: "PC_1", ip: "192.168.0.21", status: "ONLINE" },
-    { id: "PC_2", hostname: "PC_2", ip: "192.168.0.22", status: "OFFLINE" },
-    { id: "PC_3", hostname: "PC_3", ip: "192.168.0.23", status: "ONLINE" },
-];
+// Mirror Server API client.
+//   GET /api/agents          — 에이전트 목록
+//   GET /api/events?limit=N  — 최근 파일 이벤트 N건
+// Bearer 토큰을 자동 첨부하고, 401 응답 시 즉시 로그인으로 리다이렉트한다.
 
-const MOCK_EVENTS = [
-    { id: "EVT-001", time: "2026-03-24 14:23:10", agent: "PC_1", event: "/etc/myapp/config.yaml MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/myapp/config.yaml" },
-    { id: "EVT-002", time: "2026-03-24 14:25:03", agent: "PC_1", event: "/usr/local/bin/my.service MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/local/bin/my.service" },
-    { id: "EVT-003", time: "2026-03-24 14:26:11", agent: "PC_1", event: "/var/log/myapp.log DELETED", type: "DELETED", action: "BLOCKED", path: "/var/log/myapp.log" },
-    { id: "EVT-004", time: "2026-03-24 14:32:45", agent: "PC_3", event: "/etc/nginx/nginx.conf MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/nginx/nginx.conf" },
-    { id: "EVT-005", time: "2026-03-24 14:35:22", agent: "PC_1", event: "/opt/app/bin/worker MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/opt/app/bin/worker" },
-    { id: "EVT-006", time: "2026-03-24 14:38:07", agent: "PC_3", event: "/var/log/syslog DELETED", type: "DELETED", action: "BLOCKED", path: "/var/log/syslog" },
-    { id: "EVT-007", time: "2026-03-24 14:40:55", agent: "PC_1", event: "/etc/crontab MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/crontab" },
-    { id: "EVT-008", time: "2026-03-24 14:42:30", agent: "PC_3", event: "/usr/lib/libcrypto.so MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/lib/libcrypto.so" },
-    { id: "EVT-009", time: "2026-03-24 14:47:01", agent: "PC_3", event: "/etc/passwd MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/passwd" },
-    { id: "EVT-010", time: "2026-03-24 14:50:33", agent: "PC_1", event: "/tmp/.hidden_script.sh DELETED", type: "DELETED", action: "BLOCKED", path: "/tmp/.hidden_script.sh" },
-    { id: "EVT-011", time: "2026-03-24 14:55:44", agent: "PC_1", event: "/etc/ssh/sshd_config MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/ssh/sshd_config" },
-    { id: "EVT-012", time: "2026-03-24 14:58:20", agent: "PC_3", event: "/var/www/html/index.html MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/var/www/html/index.html" },
-    { id: "EVT-013", time: "2026-03-24 15:01:05", agent: "PC_1", event: "/etc/shadow MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/shadow" },
-    { id: "EVT-014", time: "2026-03-24 15:03:41", agent: "PC_3", event: "/opt/app/config/db.env DELETED", type: "DELETED", action: "BLOCKED", path: "/opt/app/config/db.env" },
-    { id: "EVT-015", time: "2026-03-24 15:06:15", agent: "PC_1", event: "/usr/bin/sudo MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/usr/bin/sudo" },
-    { id: "EVT-016", time: "2026-03-24 15:08:50", agent: "PC_3", event: "/etc/resolv.conf MODIFIED", type: "MODIFIED", action: "BLOCKED", path: "/etc/resolv.conf" },
-];
+const TOKEN_KEY = 'ig.session.token';
 
+// URL은 빌드 시 박힌 config.js의 IG_CONFIG.backendUrl이 유일한 출처.
+function getBackendURL() {
+    return ((window.IG_CONFIG && window.IG_CONFIG.backendUrl) || '').replace(/\/+$/, '');
+}
+
+async function apiFetch(path, opts = {}) {
+    const base = getBackendURL();
+    if (!base) throw new Error('backend URL not set');
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = { ...(opts.headers || {}) };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(base + path, { ...opts, headers });
+    if (res.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        location.replace('login.html');
+        throw new Error('unauthorized');
+    }
+    if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}`);
+    }
+    return res;
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function fmtTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+function normalizeAgent(a) {
+    return {
+        id: a.AgentID,
+        hostname: a.Hostname || a.AgentID,
+        ip: a.IP || '',
+        status: (a.Status || 'unknown').toUpperCase(),
+    };
+}
+
+// Backend EventType (CREATE/MODIFY/DELETE/ATTRIB/MOVE) → UI 표기 (과거형)
+const EVENT_TYPE_MAP = {
+    CREATE: 'CREATED',
+    MODIFY: 'MODIFIED',
+    DELETE: 'DELETED',
+    ATTRIB: 'ATTRIB',
+    MOVE:   'MOVED',
+};
+
+function normalizeEvent(e, agentMap) {
+    const a = agentMap[e.AgentID];
+    const agentName = (a && a.hostname) || e.AgentID;
+    const type = EVENT_TYPE_MAP[e.EventType] || e.EventType;
+    return {
+        id: `EVT-${e.ID}`,
+        time: fmtTime(e.OccurredAt),
+        agent: agentName,
+        agentId: e.AgentID,
+        event: `${e.FilePath} ${type}`,
+        type,
+        action: 'BLOCKED', // 현 agent는 차단형 protect만 emit
+        path: e.FilePath,
+        pid: e.Pid,
+        detectedBy: e.DetectedBy,
+    };
+}
+
+let _agents = [];
+let _events = [];
 const REPORT_STORE = new Map();
 
 const PATH_PROFILES = [
@@ -366,12 +417,26 @@ function classifyPath(path) {
 }
 
 const Api = {
+    // Mirror Server에서 agents + events를 가져와 캐시 갱신.
+    // app.js가 init/주기마다 await Api.refresh() 호출.
+    async refresh() {
+        const [agentsRes, eventsRes] = await Promise.all([
+            apiFetch('/api/agents'),
+            apiFetch('/api/events?limit=200'),
+        ]);
+        const agentsRaw = (await agentsRes.json()) || [];
+        const eventsRaw = (await eventsRes.json()) || [];
+        _agents = agentsRaw.map(normalizeAgent);
+        const agentMap = Object.fromEntries(_agents.map(a => [a.id, a]));
+        _events = eventsRaw.map(e => normalizeEvent(e, agentMap));
+    },
+
     getAgents() {
-        return MOCK_AGENTS;
+        return _agents;
     },
 
     getEvents() {
-        return MOCK_EVENTS;
+        return _events;
     },
 
     hasReport(eventId) {
@@ -383,7 +448,7 @@ const Api = {
     },
 
     async generateReport(eventId) {
-        const event = MOCK_EVENTS.find(e => e.id === eventId);
+        const event = _events.find(e => e.id === eventId);
         if (!event) throw new Error("Event not found");
 
         // Mock LLM call — replace with POST /api/reports/generate

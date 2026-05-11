@@ -26,13 +26,14 @@ const Theme = {
 const App = {
     currentPage: 1,
     perPage: 10,
+    refreshIntervalMs: 5000,
 
-    init() {
+    async init() {
         Theme.init();
 
-        const agents = Api.getAgents();
-        UI.renderAgents(agents);
-        this.renderFilteredEvents();
+        await this.refreshAndRender();
+        // 주기적으로 Mirror Server 데이터 동기화
+        setInterval(() => this.refreshAndRender().catch(err => console.error("refresh failed", err)), this.refreshIntervalMs);
 
         document.getElementById("search-path").addEventListener("input", () => this.resetAndRender());
 
@@ -47,6 +48,33 @@ const App = {
         });
 
         document.getElementById("report-print").addEventListener("click", () => window.print());
+    },
+
+    async refreshAndRender() {
+        try {
+            await Api.refresh();
+            this.setConnectionStatus(true);
+        } catch (err) {
+            console.error("Api.refresh failed:", err);
+            this.setConnectionStatus(false);
+        }
+        UI.renderAgents(Api.getAgents());
+        this.renderFilteredEvents();
+    },
+
+    setConnectionStatus(ok) {
+        const dot = document.getElementById("connection-dot");
+        const label = document.getElementById("connection-label");
+        if (!dot || !label) return;
+        // 빌드된 tailwind.css에 없는 클래스(bg-green-500 등)를 피해 inline style 사용
+        if (ok) {
+            dot.style.backgroundColor = "#22c55e"; // green-500
+            dot.style.boxShadow = "0 0 8px rgba(34,197,94,0.9)";
+        } else {
+            dot.style.backgroundColor = "#ef4444"; // red-500
+            dot.style.boxShadow = "0 0 8px rgba(239,68,68,0.9)";
+        }
+        label.textContent = ok ? "Connected" : "Disconnected";
     },
 
     async handleReportButton(e) {
