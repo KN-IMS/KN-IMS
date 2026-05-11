@@ -1,5 +1,5 @@
-# KN-IMS
-Server-Client based integrity monitoring system
+# KN-IG
+Server-Client based integrity guard system
 
 # Members
 Kang jiwoon  

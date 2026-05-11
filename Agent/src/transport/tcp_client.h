@@ -1,5 +1,5 @@
-#ifndef IM_TCP_CLIENT_H
-#define IM_TCP_CLIENT_H
+#ifndef IG_TCP_CLIENT_H
+#define IG_TCP_CLIENT_H
 
 #include <stdint.h>
 #include <pthread.h>
@@ -8,28 +8,28 @@
 #include "protocol.h"
 #include "../realtime/monitor.h"
 
-#define IM_RECONNECT_INIT_SEC    1
-#define IM_RECONNECT_MAX_SEC     60
-#define IM_RECONNECT_MULTIPLIER  2
-#define IM_RECONNECT_JITTER_PCT  25
-#define IM_RECONNECT_MAX_RETRIES 20
+#define IG_RECONNECT_INIT_SEC    1
+#define IG_RECONNECT_MAX_SEC     60
+#define IG_RECONNECT_MULTIPLIER  2
+#define IG_RECONNECT_JITTER_PCT  25
+#define IG_RECONNECT_MAX_RETRIES 20
 
-#define IM_SEND_MAX_RETRIES      3
+#define IG_SEND_MAX_RETRIES      3
 
-#define IM_KEEPALIVE_IDLE        60
-#define IM_KEEPALIVE_INTERVAL    10
-#define IM_KEEPALIVE_COUNT       3
+#define IG_KEEPALIVE_IDLE        60
+#define IG_KEEPALIVE_INTERVAL    10
+#define IG_KEEPALIVE_COUNT       3
 
 typedef enum {
-    IM_CONN_DISCONNECTED = 0,
-    IM_CONN_CONNECTED    = 1
-} im_conn_state_t;
+    IG_CONN_DISCONNECTED = 0,
+    IG_CONN_CONNECTED    = 1
+} ig_conn_state_t;
 
 typedef struct {
     int              fd;
     SSL             *ssl;
-    im_tls_ctx_t   *tls;
-    im_conn_state_t state;
+    ig_tls_ctx_t   *tls;
+    ig_conn_state_t state;
 
     char             host[256];
     uint16_t         port;
@@ -46,21 +46,21 @@ typedef struct {
     uint8_t          reg_monitor_type;
     char             reg_os[64];
     int              reg_cached;
-} im_tcp_client_t;
+} ig_tcp_client_t;
 
-int im_tcp_init(im_tcp_client_t *cli, im_tls_ctx_t *tls,
+int ig_tcp_init(ig_tcp_client_t *cli, ig_tls_ctx_t *tls,
                  const char *host, uint16_t port);
-int im_tcp_connect(im_tcp_client_t *cli);
-void im_tcp_disconnect(im_tcp_client_t *cli);
-int im_tcp_reconnect(im_tcp_client_t *cli);
+int ig_tcp_connect(ig_tcp_client_t *cli);
+void ig_tcp_disconnect(ig_tcp_client_t *cli);
+int ig_tcp_reconnect(ig_tcp_client_t *cli);
 
-int im_tcp_send_frame(im_tcp_client_t *cli, uint8_t type,
+int ig_tcp_send_frame(ig_tcp_client_t *cli, uint8_t type,
                        const uint8_t *payload, uint32_t payload_len);
-int im_tcp_recv_frame(im_tcp_client_t *cli, im_frame_header_t *hdr,
+int ig_tcp_recv_frame(ig_tcp_client_t *cli, ig_frame_header_t *hdr,
                        uint8_t **payload);
-void im_tcp_free(im_tcp_client_t *cli);
+void ig_tcp_free(ig_tcp_client_t *cli);
 
-int im_tcp_register(im_tcp_client_t *cli,
+int ig_tcp_register(ig_tcp_client_t *cli,
                      const char *hostname,
                      const char *ip_str,
                      uint8_t monitor_type,
@@ -68,6 +68,6 @@ int im_tcp_register(im_tcp_client_t *cli,
                      char *agent_id_out,
                      size_t id_size);
 
-int im_tcp_send_event(im_tcp_client_t *cli, const im_event_t *ev);
+int ig_tcp_send_event(ig_tcp_client_t *cli, const ig_event_t *ev);
 
-#endif /* IM_TCP_CLIENT_H */
+#endif /* IG_TCP_CLIENT_H */

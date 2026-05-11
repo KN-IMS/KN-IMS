@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KN-IMS/KN-IMS/Backend/internal"
+	"github.com/KN-IG/KN-IG/Backend/internal"
 )
 
 // Server : TCP 리스너 + 세션 관리

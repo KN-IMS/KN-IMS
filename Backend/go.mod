@@ -1,4 +1,4 @@
-module github.com/KN-IMS/KN-IMS/Backend
+module github.com/KN-IG/KN-IG/Backend
 
 go 1.25.5
 

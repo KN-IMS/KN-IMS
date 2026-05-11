@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/KN-IMS/KN-IMS/Backend/internal"
+	"github.com/KN-IG/KN-IG/Backend/internal"
 )
 
 // MySQLAgentStore : AgentStore 인터페이스의 MySQL 구현체

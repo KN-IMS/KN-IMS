@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * im_lkm_chardev.c — /dev/im_lkm char device
+ * ig_lkm_chardev.c — /dev/ig_lkm char device
  *
  * Communication channel with user space.
  *   ioctl: Add/Remove/Reset policies
@@ -15,35 +15,35 @@
 #include <linux/uaccess.h>
 #include <linux/poll.h>
 
-#include "im_lkm_common.h"
-#include "im_lkm_policy.h"
-#include "im_lkm_events.h"
+#include "ig_lkm_common.h"
+#include "ig_lkm_policy.h"
+#include "ig_lkm_events.h"
 
-static dev_t         im_devno;
-static struct cdev   im_cdev;
-static struct class *im_class;
+static dev_t         ig_devno;
+static struct cdev   ig_cdev;
+static struct class *ig_class;
 
 /* ── ioctl ──────────────────────────────────────────────── */
 
-static long im_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
+static long ig_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
-    struct im_lkm_policy_req req;
+    struct ig_lkm_policy_req req;
 
     switch (cmd) {
-    case IM_IOC_ADD_INODE:
+    case IG_IOC_ADD_INODE:
         if (copy_from_user(&req, (void __user *)arg, sizeof(req)))
             return -EFAULT;
         req.path[sizeof(req.path) - 1] = '\0';
         return inode_policy_add(req.dev, req.ino,
                                 req.mask, req.block, req.path);
 
-    case IM_IOC_REMOVE_INODE:
+    case IG_IOC_REMOVE_INODE:
         if (copy_from_user(&req, (void __user *)arg, sizeof(req)))
             return -EFAULT;
         inode_policy_remove(req.dev, req.ino);
         return 0;
 
-    case IM_IOC_CLEAR_ALL:
+    case IG_IOC_CLEAR_ALL:
         inode_policy_clear();
         return 0;
 
@@ -54,20 +54,20 @@ static long im_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 
 /* ── read (blocking) ────────────────────────────────────── */
 
-static ssize_t im_read(struct file *f, char __user *buf,
+static ssize_t ig_read(struct file *f, char __user *buf,
                          size_t count, loff_t *pos)
 {
-    struct im_lkm_event ev;
+    struct ig_lkm_event ev;
     int ret;
 
     if (count < sizeof(ev))
         return -EINVAL;
 
-    ret = wait_event_interruptible(im_wq, !im_event_empty());
+    ret = wait_event_interruptible(ig_wq, !ig_event_empty());
     if (ret)
-        return ret;   
+        return ret;
 
-    if (!im_event_pop(&ev))
+    if (!ig_event_pop(&ev))
         return 0;
 
     if (copy_to_user(buf, &ev, sizeof(ev)))
@@ -76,67 +76,67 @@ static ssize_t im_read(struct file *f, char __user *buf,
     return sizeof(ev);
 }
 
-static unsigned int im_poll(struct file *f, poll_table *wait)
+static unsigned int ig_poll(struct file *f, poll_table *wait)
 {
-    poll_wait(f, &im_wq, wait);
-    return im_event_empty() ? 0 : (POLLIN | POLLRDNORM);
+    poll_wait(f, &ig_wq, wait);
+    return ig_event_empty() ? 0 : (POLLIN | POLLRDNORM);
 }
 
-static const struct file_operations im_fops = {
+static const struct file_operations ig_fops = {
     .owner          = THIS_MODULE,
-    .unlocked_ioctl = im_ioctl,
-    .read           = im_read,
-    .poll           = im_poll,
+    .unlocked_ioctl = ig_ioctl,
+    .read           = ig_read,
+    .poll           = ig_poll,
 };
 
-int im_chardev_init(void)
+int ig_chardev_init(void)
 {
     int ret;
 
-    ret = alloc_chrdev_region(&im_devno, 0, 1, IM_LKM_DEV_NAME);
+    ret = alloc_chrdev_region(&ig_devno, 0, 1, IG_LKM_DEV_NAME);
     if (ret) {
         pr_err("alloc_chrdev_region failed: %d\n", ret);
         return ret;
     }
 
-    cdev_init(&im_cdev, &im_fops);
-    im_cdev.owner = THIS_MODULE;
+    cdev_init(&ig_cdev, &ig_fops);
+    ig_cdev.owner = THIS_MODULE;
 
-    ret = cdev_add(&im_cdev, im_devno, 1);
+    ret = cdev_add(&ig_cdev, ig_devno, 1);
     if (ret) {
         pr_err("cdev_add failed: %d\n", ret);
         goto err_cdev;
     }
 
-    im_class = class_create(THIS_MODULE, IM_LKM_DEV_NAME);
-    if (IS_ERR(im_class)) {
-        ret = PTR_ERR(im_class);
+    ig_class = class_create(THIS_MODULE, IG_LKM_DEV_NAME);
+    if (IS_ERR(ig_class)) {
+        ret = PTR_ERR(ig_class);
         pr_err("class_create failed: %d\n", ret);
         goto err_class;
     }
 
-    if (IS_ERR(device_create(im_class, NULL, im_devno,
-                              NULL, IM_LKM_DEV_NAME))) {
+    if (IS_ERR(device_create(ig_class, NULL, ig_devno,
+                              NULL, IG_LKM_DEV_NAME))) {
         ret = -ENOMEM;
         pr_err("device_create failed\n");
         goto err_device;
     }
 
     pr_info("chardev /dev/%s created (major=%d)\n",
-            IM_LKM_DEV_NAME, MAJOR(im_devno));
+            IG_LKM_DEV_NAME, MAJOR(ig_devno));
     return 0;
 
-err_device: class_destroy(im_class);
-err_class:  cdev_del(&im_cdev);
-err_cdev:   unregister_chrdev_region(im_devno, 1);
+err_device: class_destroy(ig_class);
+err_class:  cdev_del(&ig_cdev);
+err_cdev:   unregister_chrdev_region(ig_devno, 1);
     return ret;
 }
 
-void im_chardev_exit(void)
+void ig_chardev_exit(void)
 {
-    device_destroy(im_class, im_devno);
-    class_destroy(im_class);
-    cdev_del(&im_cdev);
-    unregister_chrdev_region(im_devno, 1);
+    device_destroy(ig_class, ig_devno);
+    class_destroy(ig_class);
+    cdev_del(&ig_cdev);
+    unregister_chrdev_region(ig_devno, 1);
     pr_info("chardev removed\n");
 }
