@@ -18,7 +18,7 @@
  *   - 최소 TLS 1.2, TLS 1.3은 협상으로 선택
  */
 
-int tls_context_init(im_tls_ctx_t *out,
+int tls_context_init(ig_tls_ctx_t *out,
                      const char *ca_crt,
                      const char *agent_crt,
                      const char *agent_key)
@@ -82,7 +82,7 @@ int tls_context_init(im_tls_ctx_t *out,
     return 0;
 }
 
-SSL *im_tls_wrap(im_tls_ctx_t *ctx, int fd)
+SSL *ig_tls_wrap(ig_tls_ctx_t *ctx, int fd)
 {
     if (!ctx || !ctx->ctx) return NULL;
 
@@ -108,7 +108,7 @@ SSL *im_tls_wrap(im_tls_ctx_t *ctx, int fd)
     return ssl;
 }
 
-void tls_context_free(im_tls_ctx_t *ctx)
+void tls_context_free(ig_tls_ctx_t *ctx)
 {
     if (ctx && ctx->ctx) {
         SSL_CTX_free(ctx->ctx);

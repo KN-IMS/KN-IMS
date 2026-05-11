@@ -1,10 +1,10 @@
 /*
- * im_config.c — 설정 파일 파서 (inotify + eBPF 구조)
+ * ig_config.c — 설정 파일 파서 (inotify + eBPF 구조)
  *
  * 설정 파일 형식:
  *
  *   daemonize = 0
- *   log_file = /var/log/im_monitor.log
+ *   log_file = /var/log/ig_monitor.log
  *   verbose = 1
  *   ebpf = 1          # eBPF who-data 추적 (kernel 5.8+에서만 실제 활성화)
  *
@@ -16,7 +16,7 @@
  *   # 자체 보호 (변경 시 ALERT)
  *   [protect]
  *   /usr/local/bin/agent = file
- *   /etc/im_monitor/im.conf = file
+ *   /etc/ig_monitor/ig.conf = file
  *
  * 하위호환: [watch_inotify] 도 [watch] 와 동일하게 처리됨.
  */
@@ -41,11 +41,11 @@ typedef enum {
     SECTION_PROTECT
 } config_section_t;
 
-int im_config_load(im_config_t *cfg, const char *path) {
-    memset(cfg, 0, sizeof(im_config_t));
+int ig_config_load(ig_config_t *cfg, const char *path) {
+    memset(cfg, 0, sizeof(ig_config_t));
 
     /* 기본값 */
-    strncpy(cfg->log_file, IM_LOG_FILE, sizeof(cfg->log_file) - 1);
+    strncpy(cfg->log_file, IG_LOG_FILE, sizeof(cfg->log_file) - 1);
     cfg->daemonize    = 1;
     cfg->log_to_syslog = 0;
     cfg->verbose       = 0;
@@ -102,9 +102,9 @@ int im_config_load(im_config_t *cfg, const char *path) {
             break;
 
         case SECTION_WATCH:
-            if (cfg->watch_count < IM_MAX_WATCHES) {
-                im_watch_entry_t *w = &cfg->watches[cfg->watch_count];
-                strncpy(w->path, key, IM_MAX_PATH - 1);
+            if (cfg->watch_count < IG_MAX_WATCHES) {
+                ig_watch_entry_t *w = &cfg->watches[cfg->watch_count];
+                strncpy(w->path, key, IG_MAX_PATH - 1);
                 w->recursive = (strcmp(val, "recursive") == 0) ? 1 : 0;
                 cfg->watch_count++;
             }
@@ -112,8 +112,8 @@ int im_config_load(im_config_t *cfg, const char *path) {
 
         case SECTION_PROTECT:
             if (cfg->protect_count < 32) {
-                im_watch_entry_t *w = &cfg->protect_paths[cfg->protect_count];
-                strncpy(w->path, key, IM_MAX_PATH - 1);
+                ig_watch_entry_t *w = &cfg->protect_paths[cfg->protect_count];
+                strncpy(w->path, key, IG_MAX_PATH - 1);
                 w->recursive = 0;
                 cfg->protect_count++;
             }
@@ -125,26 +125,26 @@ int im_config_load(im_config_t *cfg, const char *path) {
     return 0;
 }
 
-void im_config_dump(im_config_t *cfg) {
-    LOG_INFO_FIM("╔══════════════════════════════════════╗");
-    LOG_INFO_FIM("║           IM Monitor config          ║");
-    LOG_INFO_FIM("╠══════════════════════════════════════╣");
-    LOG_INFO_FIM("║ daemonize : %d", cfg->daemonize);
-    LOG_INFO_FIM("║ log_file  : %s", cfg->log_file);
-    LOG_INFO_FIM("║ syslog    : %d", cfg->log_to_syslog);
-    LOG_INFO_FIM("║ verbose   : %d", cfg->verbose);
-    LOG_INFO_FIM("║ ebpf      : %d (Runtime Kernel Check Applied)",
+void ig_config_dump(ig_config_t *cfg) {
+    LOG_INFO_IG("╔══════════════════════════════════════╗");
+    LOG_INFO_IG("║           IG Monitor config          ║");
+    LOG_INFO_IG("╠══════════════════════════════════════╣");
+    LOG_INFO_IG("║ daemonize : %d", cfg->daemonize);
+    LOG_INFO_IG("║ log_file  : %s", cfg->log_file);
+    LOG_INFO_IG("║ syslog    : %d", cfg->log_to_syslog);
+    LOG_INFO_IG("║ verbose   : %d", cfg->verbose);
+    LOG_INFO_IG("║ ebpf      : %d (Runtime Kernel Check Applied)",
                  cfg->ebpf_enabled);
-    LOG_INFO_FIM("╠══════════════════════════════════════╣");
+    LOG_INFO_IG("╠══════════════════════════════════════╣");
 
-    LOG_INFO_FIM("║ [watch] %d-targets", cfg->watch_count);
+    LOG_INFO_IG("║ [watch] %d-targets", cfg->watch_count);
     for (int i = 0; i < cfg->watch_count; i++)
-        LOG_INFO_FIM("║   → %s (%s)", cfg->watches[i].path,
+        LOG_INFO_IG("║   → %s (%s)", cfg->watches[i].path,
                      cfg->watches[i].recursive ? "recursive" : "simple");
 
-    LOG_INFO_FIM("║ [self-protection] %d-targets", cfg->protect_count);
+    LOG_INFO_IG("║ [self-protection] %d-targets", cfg->protect_count);
     for (int i = 0; i < cfg->protect_count; i++)
-        LOG_INFO_FIM("║   → %s", cfg->protect_paths[i].path);
+        LOG_INFO_IG("║   → %s", cfg->protect_paths[i].path);
 
-    LOG_INFO_FIM("╚══════════════════════════════════════╝");
+    LOG_INFO_IG("╚══════════════════════════════════════╝");
 }

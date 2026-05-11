@@ -21,8 +21,8 @@ set(REALTIME_SRCS
 )
 
 set(CORE_SRCS
-    src/im_config.c
-    src/im_queue.c
+    src/ig_config.c
+    src/ig_queue.c
     src/lkm/lkm_client.c
 )
 
@@ -75,7 +75,7 @@ else()
     set(OPENSSL_LINK_LIBS ssl crypto)
 endif()
 
-target_link_libraries(agent im_core pthread ${OPENSSL_LINK_LIBS})
+target_link_libraries(agent ig_core pthread ${OPENSSL_LINK_LIBS})
 
 # ── libbpf 선택적 의존성 (eBPF who-data 추적용) ──
 # 요구 사항: kernel 5.8+, libbpf >= 0.6
@@ -91,26 +91,26 @@ if(LIBBPF_FOUND AND CLANG_BIN)
     # ── eBPF skeleton 빌드 (bpf.c → skel.h) ───────
     # skel.h는 반드시 현재 시스템의 bpftool/libbpf로 생성해야 ABI 일치
     add_custom_command(
-        OUTPUT  ${CMAKE_SOURCE_DIR}/src/ebpf/im_trace.skel.h
+        OUTPUT  ${CMAKE_SOURCE_DIR}/src/ebpf/ig_trace.skel.h
         COMMAND $(MAKE) -C ${CMAKE_SOURCE_DIR}/src/ebpf
-        DEPENDS ${CMAKE_SOURCE_DIR}/src/ebpf/im_trace.bpf.c
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/ebpf/ig_trace.bpf.c
                 ${CMAKE_SOURCE_DIR}/src/ebpf/vmlinux.h
-        COMMENT "Generating eBPF skeleton (im_trace.skel.h)"
+        COMMENT "Generating eBPF skeleton (ig_trace.skel.h)"
         VERBATIM
     )
     add_custom_target(ebpf_skel
-        DEPENDS ${CMAKE_SOURCE_DIR}/src/ebpf/im_trace.skel.h
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/ebpf/ig_trace.skel.h
     )
 
-    # im_trace.c 빌드 포함 + skel.h 인클루드 경로 추가
-    list(APPEND EBPF_SRCS src/ebpf/im_trace.c)
-    target_sources(agent PRIVATE src/ebpf/im_trace.c)
+    # ig_trace.c 빌드 포함 + skel.h 인클루드 경로 추가
+    list(APPEND EBPF_SRCS src/ebpf/ig_trace.c)
+    target_sources(agent PRIVATE src/ebpf/ig_trace.c)
     add_dependencies(agent ebpf_skel)
     target_compile_definitions(agent PRIVATE HAVE_LIBBPF=1)
     target_link_libraries(agent ${LIBBPF_LIBRARIES})
     target_include_directories(agent PRIVATE
         ${LIBBPF_INCLUDE_DIRS}
-        ${CMAKE_SOURCE_DIR}/src/ebpf   # im_trace.skel.h 위치
+        ${CMAKE_SOURCE_DIR}/src/ebpf   # ig_trace.skel.h 위치
     )
     message(STATUS "libbpf found (${LIBBPF_VERSION}) + clang found — eBPF enabled")
 elseif(LIBBPF_FOUND AND NOT CLANG_BIN)
@@ -120,7 +120,7 @@ else()
 endif()
 
 # ── TODO: gRPC 외부 의존성 ──────────────────────
-# im-common, im-proto 레포 연동 후 아래 활성화
+# ig-common, ig-proto 레포 연동 후 아래 활성화
 #
 # find_package(Protobuf REQUIRED)
 # find_package(gRPC REQUIRED)
@@ -137,10 +137,10 @@ add_executable(test_transport
     ${TRANSPORT_SRCS}
     ${SCANNER_SRCS}
 )
-target_link_libraries(test_transport im_core pthread ${OPENSSL_LINK_LIBS})
+target_link_libraries(test_transport ig_core pthread ${OPENSSL_LINK_LIBS})
 
 # ── 설치 ───────────────────────────────────────
 install(TARGETS agent DESTINATION bin)
-install(FILES configs/im.conf
-        DESTINATION /etc/im_monitor
-        RENAME im.conf)
+install(FILES configs/ig.conf
+        DESTINATION /etc/ig_monitor
+        RENAME ig.conf)

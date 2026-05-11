@@ -5,12 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-SERVICE_NAME="fileguard.service"
+SERVICE_NAME="integrityguard.service"
 BINARY_SRC="${AGENT_DIR}/build/agent"
 BINARY_DST="/usr/local/bin/agent"
-CONFIG_SRC="${AGENT_DIR}/configs/im.conf"
-CONFIG_DST="/etc/im_monitor/im.conf"
-SERVICE_SRC="${AGENT_DIR}/fileguard.service"
+CONFIG_SRC="${AGENT_DIR}/configs/ig.conf"
+CONFIG_DST="/etc/ig_monitor/ig.conf"
+SERVICE_SRC="${AGENT_DIR}/integrityguard.service"
 SERVICE_DST="/etc/systemd/system/${SERVICE_NAME}"
 LOG_LINES="100"
 
@@ -23,7 +23,7 @@ Options:
   --binary-src PATH     Agent binary source path
   --config-src PATH     Agent config source path
   --service-src PATH    systemd unit source path
-  --service-name NAME   systemd service name (default: fileguard.service)
+  --service-name NAME   systemd service name (default: integrityguard.service)
   --log-lines N         journal tail line count (default: 100)
   -h, --help            Show help
 
@@ -108,7 +108,7 @@ ${SUDO} pkill -KILL -f "${BINARY_DST}" 2>/dev/null || true
 ${SUDO} pkill -KILL -f "${BINARY_SRC}" 2>/dev/null || true
 
 log "설치 경로 준비"
-${SUDO} mkdir -p /etc/im_monitor
+${SUDO} mkdir -p /etc/ig_monitor
 
 log "binary 설치 -> ${BINARY_DST}"
 ${SUDO} install -m 0755 "$BINARY_SRC" "$BINARY_DST"

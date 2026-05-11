@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/KN-IMS/KN-IMS/Backend/internal"
+	"github.com/KN-IG/KN-IG/Backend/internal"
 )
 
 // MySQLAlertStore : AlertStore 인터페이스의 MySQL 구현체

@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-static uint32_t next_seq(im_tcp_client_t *cli)
+static uint32_t next_seq(ig_tcp_client_t *cli)
 {
     pthread_mutex_lock(&cli->seq_lock);
     uint32_t seq = ++cli->seq_num;
@@ -26,15 +26,15 @@ static int set_keepalive(int fd)
     if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, sizeof(optval)) < 0)
         return -1;
 
-    int idle = IM_KEEPALIVE_IDLE;
+    int idle = IG_KEEPALIVE_IDLE;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) < 0)
         return -1;
 
-    int interval = IM_KEEPALIVE_INTERVAL;
+    int interval = IG_KEEPALIVE_INTERVAL;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval)) < 0)
         return -1;
 
-    int count = IM_KEEPALIVE_COUNT;
+    int count = IG_KEEPALIVE_COUNT;
     if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(count)) < 0)
         return -1;
 
@@ -65,17 +65,17 @@ static int ssl_read_all(SSL *ssl, uint8_t *buf, size_t len)
 
 static double apply_jitter(double base)
 {
-    double jitter = (double)(rand() % (IM_RECONNECT_JITTER_PCT * 2) - IM_RECONNECT_JITTER_PCT) / 100.0;
+    double jitter = (double)(rand() % (IG_RECONNECT_JITTER_PCT * 2) - IG_RECONNECT_JITTER_PCT) / 100.0;
     return base * (1.0 + jitter);
 }
 
-static int im_tcp_send_frame_locked(im_tcp_client_t *cli, uint8_t type,
+static int ig_tcp_send_frame_locked(ig_tcp_client_t *cli, uint8_t type,
                                      const uint8_t *payload, uint32_t payload_len);
 
-static int im_tcp_recv_frame_locked(im_tcp_client_t *cli, im_frame_header_t *hdr,
+static int ig_tcp_recv_frame_locked(ig_tcp_client_t *cli, ig_frame_header_t *hdr,
                                      uint8_t **payload);
 
-static int im_tcp_register_internal_locked(im_tcp_client_t *cli,
+static int ig_tcp_register_internal_locked(ig_tcp_client_t *cli,
                                             const char *hostname,
                                             const char *ip_str,
                                             uint8_t monitor_type,
@@ -83,15 +83,15 @@ static int im_tcp_register_internal_locked(im_tcp_client_t *cli,
                                             char *agent_id_out,
                                             size_t id_size)
 {
-    if (!cli || cli->state != IM_CONN_CONNECTED) return -1;
+    if (!cli || cli->state != IG_CONN_CONNECTED) return -1;
 
     struct in_addr addr;
     if (inet_pton(AF_INET, ip_str, &addr) != 1) {
-        syslog(LOG_ERR, "im-tcp: 잘못된 IP: %s", ip_str);
+        syslog(LOG_ERR, "ig-tcp: 잘못된 IP: %s", ip_str);
         return -1;
     }
 
-    im_msg_register_t msg = {0};
+    ig_msg_register_t msg = {0};
     msg.hostname_len = (uint16_t)strlen(hostname);
     msg.hostname = (char *)hostname;
     msg.ip = ntohl(addr.s_addr);
@@ -100,22 +100,22 @@ static int im_tcp_register_internal_locked(im_tcp_client_t *cli,
     msg.os = (char *)os;
 
     uint8_t buf[1024];
-    int len = im_register_encode(&msg, buf, sizeof(buf));
+    int len = ig_register_encode(&msg, buf, sizeof(buf));
     if (len < 0) {
-        syslog(LOG_ERR, "im-tcp: REGISTER 직렬화 실패");
+        syslog(LOG_ERR, "ig-tcp: REGISTER 직렬화 실패");
         return -1;
     }
 
-    if (im_tcp_send_frame_locked(cli, IM_MSG_REGISTER, buf, (uint32_t)len) < 0) {
-        syslog(LOG_ERR, "im-tcp: REGISTER 전송 실패");
+    if (ig_tcp_send_frame_locked(cli, IG_MSG_REGISTER, buf, (uint32_t)len) < 0) {
+        syslog(LOG_ERR, "ig-tcp: REGISTER 전송 실패");
         return -1;
     }
 
-    im_frame_header_t hdr;
+    ig_frame_header_t hdr;
     uint8_t *payload = NULL;
-    int plen = im_tcp_recv_frame_locked(cli, &hdr, &payload);
-    if (plen < 8 || hdr.type != IM_MSG_REGISTER || !payload) {
-        syslog(LOG_ERR, "im-tcp: REGISTER ACK 수신 실패 (plen=%d)", plen);
+    int plen = ig_tcp_recv_frame_locked(cli, &hdr, &payload);
+    if (plen < 8 || hdr.type != IG_MSG_REGISTER || !payload) {
+        syslog(LOG_ERR, "ig-tcp: REGISTER ACK 수신 실패 (plen=%d)", plen);
         free(payload);
         return -1;
     }
@@ -144,12 +144,12 @@ static int im_tcp_register_internal_locked(im_tcp_client_t *cli,
     cli->reg_monitor_type = monitor_type;
     cli->reg_cached = 1;
 
-    syslog(LOG_INFO, "im-tcp: 등록 완료 (agent_id=%llu)",
+    syslog(LOG_INFO, "ig-tcp: 등록 완료 (agent_id=%llu)",
            (unsigned long long)cli->agent_id);
     return 0;
 }
 
-int im_tcp_init(im_tcp_client_t *cli, im_tls_ctx_t *tls,
+int ig_tcp_init(ig_tcp_client_t *cli, ig_tls_ctx_t *tls,
                  const char *host, uint16_t port)
 {
     if (!cli || !tls || !host) return -1;
@@ -157,7 +157,7 @@ int im_tcp_init(im_tcp_client_t *cli, im_tls_ctx_t *tls,
     memset(cli, 0, sizeof(*cli));
     cli->fd = -1;
     cli->tls = tls;
-    cli->state = IM_CONN_DISCONNECTED;
+    cli->state = IG_CONN_DISCONNECTED;
     cli->port = port;
     strncpy(cli->host, host, sizeof(cli->host) - 1);
     cli->host[sizeof(cli->host) - 1] = '\0';
@@ -169,7 +169,7 @@ int im_tcp_init(im_tcp_client_t *cli, im_tls_ctx_t *tls,
     return 0;
 }
 
-static int im_tcp_connect_locked(im_tcp_client_t *cli)
+static int ig_tcp_connect_locked(ig_tcp_client_t *cli)
 {
     if (!cli || !cli->tls) return -1;
 
@@ -186,19 +186,19 @@ static int im_tcp_connect_locked(im_tcp_client_t *cli)
     snprintf(port_str, sizeof(port_str), "%u", cli->port);
 
     if (getaddrinfo(cli->host, port_str, &hints, &res) != 0) {
-        syslog(LOG_ERR, "im-tcp: DNS 해석 실패: %s", cli->host);
+        syslog(LOG_ERR, "ig-tcp: DNS 해석 실패: %s", cli->host);
         return -1;
     }
 
     fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (fd < 0) {
-        syslog(LOG_ERR, "im-tcp: 소켓 생성 실패: %s", strerror(errno));
+        syslog(LOG_ERR, "ig-tcp: 소켓 생성 실패: %s", strerror(errno));
         freeaddrinfo(res);
         return -1;
     }
 
     if (connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
-        syslog(LOG_ERR, "im-tcp: 연결 실패: %s:%u (%s)",
+        syslog(LOG_ERR, "ig-tcp: 연결 실패: %s:%u (%s)",
                cli->host, cli->port, strerror(errno));
         close(fd);
         freeaddrinfo(res);
@@ -207,9 +207,9 @@ static int im_tcp_connect_locked(im_tcp_client_t *cli)
     freeaddrinfo(res);
 
     if (set_keepalive(fd) < 0)
-        syslog(LOG_WARNING, "im-tcp: keepalive 설정 실패");
+        syslog(LOG_WARNING, "ig-tcp: keepalive 설정 실패");
 
-    ssl = im_tls_wrap(cli->tls, fd);
+    ssl = ig_tls_wrap(cli->tls, fd);
     if (!ssl) {
         close(fd);
         return -1;
@@ -217,28 +217,28 @@ static int im_tcp_connect_locked(im_tcp_client_t *cli)
 
     cli->fd = fd;
     cli->ssl = ssl;
-    cli->state = IM_CONN_CONNECTED;
+    cli->state = IG_CONN_CONNECTED;
     pthread_mutex_lock(&cli->seq_lock);
     cli->seq_num = 0;
     pthread_mutex_unlock(&cli->seq_lock);
     cli->send_failures = 0;
 
-    syslog(LOG_INFO, "im-tcp: 서버 연결 성공 %s:%u", cli->host, cli->port);
+    syslog(LOG_INFO, "ig-tcp: 서버 연결 성공 %s:%u", cli->host, cli->port);
     return 0;
 }
 
-int im_tcp_connect(im_tcp_client_t *cli)
+int ig_tcp_connect(ig_tcp_client_t *cli)
 {
     int ret;
     if (!cli) return -1;
 
     pthread_mutex_lock(&cli->conn_lock);
-    ret = im_tcp_connect_locked(cli);
+    ret = ig_tcp_connect_locked(cli);
     pthread_mutex_unlock(&cli->conn_lock);
     return ret;
 }
 
-static void im_tcp_disconnect_locked(im_tcp_client_t *cli)
+static void ig_tcp_disconnect_locked(ig_tcp_client_t *cli)
 {
     if (!cli) return;
 
@@ -249,7 +249,7 @@ static void im_tcp_disconnect_locked(im_tcp_client_t *cli)
     fd = cli->fd;
     cli->ssl = NULL;
     cli->fd = -1;
-    cli->state = IM_CONN_DISCONNECTED;
+    cli->state = IG_CONN_DISCONNECTED;
     cli->send_failures = 0;
     pthread_mutex_lock(&cli->seq_lock);
     cli->seq_num = 0;
@@ -263,85 +263,85 @@ static void im_tcp_disconnect_locked(im_tcp_client_t *cli)
         close(fd);
 }
 
-void im_tcp_disconnect(im_tcp_client_t *cli)
+void ig_tcp_disconnect(ig_tcp_client_t *cli)
 {
     if (!cli) return;
 
     pthread_mutex_lock(&cli->conn_lock);
-    im_tcp_disconnect_locked(cli);
+    ig_tcp_disconnect_locked(cli);
     pthread_mutex_unlock(&cli->conn_lock);
 }
 
-int im_tcp_reconnect(im_tcp_client_t *cli)
+int ig_tcp_reconnect(ig_tcp_client_t *cli)
 {
     if (!cli) return -1;
 
     pthread_mutex_lock(&cli->conn_lock);
-    im_tcp_disconnect_locked(cli);
+    ig_tcp_disconnect_locked(cli);
 
-    double delay = IM_RECONNECT_INIT_SEC;
-    for (int i = 0; i < IM_RECONNECT_MAX_RETRIES; i++) {
+    double delay = IG_RECONNECT_INIT_SEC;
+    for (int i = 0; i < IG_RECONNECT_MAX_RETRIES; i++) {
         double wait = apply_jitter(delay);
         struct timespec ts;
 
-        syslog(LOG_INFO, "im-tcp: 재연결 시도 %d/%d (%.1f초 후)",
-               i + 1, IM_RECONNECT_MAX_RETRIES, wait);
+        syslog(LOG_INFO, "ig-tcp: 재연결 시도 %d/%d (%.1f초 후)",
+               i + 1, IG_RECONNECT_MAX_RETRIES, wait);
 
         ts.tv_sec = (time_t)wait;
         ts.tv_nsec = (long)((wait - ts.tv_sec) * 1e9);
         nanosleep(&ts, NULL);
 
-        if (im_tcp_connect_locked(cli) == 0) {
+        if (ig_tcp_connect_locked(cli) == 0) {
             if (!cli->reg_cached ||
-                im_tcp_register_internal_locked(cli,
+                ig_tcp_register_internal_locked(cli,
                                                 cli->reg_hostname,
                                                 cli->reg_ip,
                                                 cli->reg_monitor_type,
                                                 cli->reg_os,
                                                 NULL,
                                                 0) == 0) {
-                syslog(LOG_INFO, "im-tcp: 재연결 성공 (시도 %d)", i + 1);
+                syslog(LOG_INFO, "ig-tcp: 재연결 성공 (시도 %d)", i + 1);
                 pthread_mutex_unlock(&cli->conn_lock);
                 return 0;
             }
 
-            syslog(LOG_WARNING, "im-tcp: 재연결 후 재등록 실패");
-            im_tcp_disconnect_locked(cli);
+            syslog(LOG_WARNING, "ig-tcp: 재연결 후 재등록 실패");
+            ig_tcp_disconnect_locked(cli);
         }
 
-        delay *= IM_RECONNECT_MULTIPLIER;
-        if (delay > IM_RECONNECT_MAX_SEC)
-            delay = IM_RECONNECT_MAX_SEC;
+        delay *= IG_RECONNECT_MULTIPLIER;
+        if (delay > IG_RECONNECT_MAX_SEC)
+            delay = IG_RECONNECT_MAX_SEC;
     }
 
-    syslog(LOG_ERR, "im-tcp: 재연결 실패 — 최대 시도 횟수 초과 (%d회)",
-           IM_RECONNECT_MAX_RETRIES);
+    syslog(LOG_ERR, "ig-tcp: 재연결 실패 — 최대 시도 횟수 초과 (%d회)",
+           IG_RECONNECT_MAX_RETRIES);
     pthread_mutex_unlock(&cli->conn_lock);
     return -1;
 }
 
-static int im_tcp_send_frame_locked(im_tcp_client_t *cli, uint8_t type,
+static int ig_tcp_send_frame_locked(ig_tcp_client_t *cli, uint8_t type,
                                      const uint8_t *payload, uint32_t payload_len)
 {
     if (!cli) return -1;
-    if (payload_len > IM_MAX_FRAME_SIZE) return -1;
+    if (payload_len > IG_MAX_FRAME_SIZE) return -1;
 
-    im_frame_header_t hdr;
+    ig_frame_header_t hdr;
     hdr.length = payload_len;
     hdr.type = type;
     int ret = -1;
     int failures = 0;
     int reconnect_needed = 0;
-    uint8_t hdr_buf[IM_FRAME_HEADER_SIZE];
+    uint8_t hdr_buf[IG_FRAME_HEADER_SIZE];
 
-    if (cli->state != IM_CONN_CONNECTED || !cli->ssl) {
+    if (cli->state != IG_CONN_CONNECTED || !cli->ssl) {
         return -1;
     }
 
     hdr.seq_num = next_seq(cli);
-    im_frame_header_encode(&hdr, hdr_buf);
+    ig_frame_header_encode(&hdr, hdr_buf);
 
-    ret = ssl_write_all(cli->ssl, hdr_buf, IM_FRAME_HEADER_SIZE);
+    ret = ssl_write_all(cli->ssl, hdr_buf, IG_FRAME_HEADER_SIZE);
     if (ret == 0 && payload_len > 0)
         ret = ssl_write_all(cli->ssl, payload, payload_len);
 
@@ -349,7 +349,7 @@ static int im_tcp_send_frame_locked(im_tcp_client_t *cli, uint8_t type,
         cli->send_failures++;
         failures = cli->send_failures;
 
-        if (cli->send_failures >= IM_SEND_MAX_RETRIES) {
+        if (cli->send_failures >= IG_SEND_MAX_RETRIES) {
             cli->send_failures = 0;
             reconnect_needed = 1;
         }
@@ -358,11 +358,11 @@ static int im_tcp_send_frame_locked(im_tcp_client_t *cli, uint8_t type,
     }
 
     if (ret < 0) {
-        syslog(LOG_ERR, "im-tcp: 프레임 전송 실패 (type=0x%02x, 연속 %d회)",
+        syslog(LOG_ERR, "ig-tcp: 프레임 전송 실패 (type=0x%02x, 연속 %d회)",
                type, failures);
         if (reconnect_needed) {
-            syslog(LOG_WARNING, "im-tcp: 전송 %d회 실패 — 재연결 시작",
-                   IM_SEND_MAX_RETRIES);
+            syslog(LOG_WARNING, "ig-tcp: 전송 %d회 실패 — 재연결 시작",
+                   IG_SEND_MAX_RETRIES);
             return -2;
         }
         return -1;
@@ -371,7 +371,7 @@ static int im_tcp_send_frame_locked(im_tcp_client_t *cli, uint8_t type,
     return 0;
 }
 
-int im_tcp_send_frame(im_tcp_client_t *cli, uint8_t type,
+int ig_tcp_send_frame(ig_tcp_client_t *cli, uint8_t type,
                        const uint8_t *payload, uint32_t payload_len)
 {
     int ret;
@@ -379,12 +379,12 @@ int im_tcp_send_frame(im_tcp_client_t *cli, uint8_t type,
         return -1;
 
     pthread_mutex_lock(&cli->conn_lock);
-    ret = im_tcp_send_frame_locked(cli, type, payload, payload_len);
+    ret = ig_tcp_send_frame_locked(cli, type, payload, payload_len);
     pthread_mutex_unlock(&cli->conn_lock);
     return ret;
 }
 
-static int im_tcp_recv_frame_locked(im_tcp_client_t *cli, im_frame_header_t *hdr,
+static int ig_tcp_recv_frame_locked(ig_tcp_client_t *cli, ig_frame_header_t *hdr,
                                      uint8_t **payload)
 {
     if (!cli || !hdr || !payload)
@@ -392,20 +392,20 @@ static int im_tcp_recv_frame_locked(im_tcp_client_t *cli, im_frame_header_t *hdr
 
     *payload = NULL;
 
-    if (cli->state != IM_CONN_CONNECTED || !cli->ssl)
+    if (cli->state != IG_CONN_CONNECTED || !cli->ssl)
         return -1;
 
-    uint8_t hdr_buf[IM_FRAME_HEADER_SIZE];
+    uint8_t hdr_buf[IG_FRAME_HEADER_SIZE];
 
-    if (ssl_read_all(cli->ssl, hdr_buf, IM_FRAME_HEADER_SIZE) < 0) {
+    if (ssl_read_all(cli->ssl, hdr_buf, IG_FRAME_HEADER_SIZE) < 0) {
         return -1;
     }
 
-    im_frame_header_decode(hdr_buf, hdr);
+    ig_frame_header_decode(hdr_buf, hdr);
 
-    if (hdr->length > IM_MAX_FRAME_SIZE) {
-        syslog(LOG_ERR, "im-tcp: 프레임 크기 초과 (%u > %u)",
-               hdr->length, IM_MAX_FRAME_SIZE);
+    if (hdr->length > IG_MAX_FRAME_SIZE) {
+        syslog(LOG_ERR, "ig-tcp: 프레임 크기 초과 (%u > %u)",
+               hdr->length, IG_MAX_FRAME_SIZE);
         return -1;
     }
 
@@ -424,7 +424,7 @@ static int im_tcp_recv_frame_locked(im_tcp_client_t *cli, im_frame_header_t *hdr
     return (int)hdr->length;
 }
 
-int im_tcp_recv_frame(im_tcp_client_t *cli, im_frame_header_t *hdr,
+int ig_tcp_recv_frame(ig_tcp_client_t *cli, ig_frame_header_t *hdr,
                        uint8_t **payload)
 {
     int ret;
@@ -432,46 +432,46 @@ int im_tcp_recv_frame(im_tcp_client_t *cli, im_frame_header_t *hdr,
         return -1;
 
     pthread_mutex_lock(&cli->conn_lock);
-    ret = im_tcp_recv_frame_locked(cli, hdr, payload);
+    ret = ig_tcp_recv_frame_locked(cli, hdr, payload);
     pthread_mutex_unlock(&cli->conn_lock);
     return ret;
 }
 
-void im_tcp_free(im_tcp_client_t *cli)
+void ig_tcp_free(ig_tcp_client_t *cli)
 {
     if (!cli) return;
-    im_tcp_disconnect(cli);
+    ig_tcp_disconnect(cli);
     pthread_mutex_destroy(&cli->seq_lock);
     pthread_mutex_destroy(&cli->conn_lock);
 }
 
-static uint8_t map_event_type(im_event_type_t t)
+static uint8_t map_event_type(ig_event_type_t t)
 {
     switch (t) {
-    case IM_EVENT_CREATE: return IM_EVT_CREATE;
-    case IM_EVENT_MODIFY: return IM_EVT_MODIFY;
-    case IM_EVENT_DELETE: return IM_EVT_DELETE;
-    case IM_EVENT_ATTRIB: return IM_EVT_ATTRIB;
-    case IM_EVENT_MOVE:   return IM_EVT_MOVE;
-    default:               return IM_EVT_MODIFY;
+    case IG_EVENT_CREATE: return IG_EVT_CREATE;
+    case IG_EVENT_MODIFY: return IG_EVT_MODIFY;
+    case IG_EVENT_DELETE: return IG_EVT_DELETE;
+    case IG_EVENT_ATTRIB: return IG_EVT_ATTRIB;
+    case IG_EVENT_MOVE:   return IG_EVT_MOVE;
+    default:               return IG_EVT_MODIFY;
     }
 }
 
-static uint8_t map_source(im_event_source_t s)
+static uint8_t map_source(ig_event_source_t s)
 {
     switch (s) {
-    case IM_SOURCE_EBPF:
-        return IM_MON_EBPF;
-    case IM_SOURCE_LKM:
-        return IM_MON_LKM;
-    case IM_SOURCE_FANOTIFY:
-        return IM_MON_FANOTIFY;
+    case IG_SOURCE_EBPF:
+        return IG_MON_EBPF;
+    case IG_SOURCE_LKM:
+        return IG_MON_LKM;
+    case IG_SOURCE_FANOTIFY:
+        return IG_MON_FANOTIFY;
     default:
         return 0;
     }
 }
 
-int im_tcp_register(im_tcp_client_t *cli,
+int ig_tcp_register(ig_tcp_client_t *cli,
                      const char *hostname,
                      const char *ip_str,
                      uint8_t monitor_type,
@@ -483,17 +483,17 @@ int im_tcp_register(im_tcp_client_t *cli,
     if (!cli) return -1;
 
     pthread_mutex_lock(&cli->conn_lock);
-    ret = im_tcp_register_internal_locked(cli, hostname, ip_str, monitor_type,
+    ret = ig_tcp_register_internal_locked(cli, hostname, ip_str, monitor_type,
                                            os, agent_id_out, id_size);
     pthread_mutex_unlock(&cli->conn_lock);
     return ret;
 }
 
-int im_tcp_send_event(im_tcp_client_t *cli, const im_event_t *ev)
+int ig_tcp_send_event(ig_tcp_client_t *cli, const ig_event_t *ev)
 {
-    if (!cli || cli->state != IM_CONN_CONNECTED || !ev) return -1;
+    if (!cli || cli->state != IG_CONN_CONNECTED || !ev) return -1;
 
-    im_msg_file_event_t msg;
+    ig_msg_file_event_t msg;
     memset(&msg, 0, sizeof(msg));
     msg.agent_id = cli->agent_id;
     msg.event_type = map_event_type(ev->type);
@@ -507,21 +507,21 @@ int im_tcp_send_event(im_tcp_client_t *cli, const im_event_t *ev)
     msg.timestamp = (uint32_t)ev->timestamp;
 
     if (msg.detected_by == 0) {
-        syslog(LOG_WARNING, "im-tcp: 지원하지 않는 이벤트 source=%d — FILE_EVENT 전송 생략",
+        syslog(LOG_WARNING, "ig-tcp: 지원하지 않는 이벤트 source=%d — FILE_EVENT 전송 생략",
                (int)ev->source);
         return 0;
     }
 
     uint8_t buf[8192];
-    int len = im_file_event_encode(&msg, buf, sizeof(buf));
+    int len = ig_file_event_encode(&msg, buf, sizeof(buf));
     if (len < 0) {
-        syslog(LOG_ERR, "im-tcp: FILE_EVENT 직렬화 실패");
+        syslog(LOG_ERR, "ig-tcp: FILE_EVENT 직렬화 실패");
         return -1;
     }
 
-    int ret = im_tcp_send_frame(cli, IM_MSG_FILE_EVENT, buf, (uint32_t)len);
+    int ret = ig_tcp_send_frame(cli, IG_MSG_FILE_EVENT, buf, (uint32_t)len);
     if (ret < 0)
-        syslog(LOG_WARNING, "im-tcp: FILE_EVENT 전송 실패");
+        syslog(LOG_WARNING, "ig-tcp: FILE_EVENT 전송 실패");
 
     return ret;
 }

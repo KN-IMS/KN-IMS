@@ -4,11 +4,11 @@
 # ── 데몬 설정 ──────────────────────────────────
 daemon:
   daemonize: false
-  pid_file: /var/run/im_monitor.pid
+  pid_file: /var/run/ig_monitor.pid
 
 # ── 로깅 ───────────────────────────────────────
 logging:
-  file: /var/log/im_monitor.log
+  file: /var/log/ig_monitor.log
   syslog: false
   verbose: false
 
@@ -18,29 +18,29 @@ realtime:
   fanotify:
     enabled: false
     watches:
-      - path: /tmp/im_test/
+      - path: /tmp/ig_test/
         mode: mount
 
   # inotify: 특정 디렉토리 정밀 감시
   inotify:
     enabled: true
     watches:
-      - path: /tmp/im_test/critical/
+      - path: /tmp/ig_test/critical/
         recursive: true
-      - path: /tmp/im_test/config/
+      - path: /tmp/ig_test/config/
         recursive: false
 
 # ── 에이전트 자체 보호 ─────────────────────────
 protect:
   - /usr/local/bin/agent
-  - /etc/im_monitor/im.conf
+  - /etc/ig_monitor/ig.conf
 
 # ── 베이스라인 스캔 (주기적) ───────────────────
 scanner:
   enabled: false
   interval_sec: 3600        # 1시간마다 전체 스캔
   hash_algorithm: sha256
-  db_path: /var/lib/im_monitor/baseline.db
+  db_path: /var/lib/ig_monitor/baseline.db
   scan_paths:
     - path: /etc
       recursive: true

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/KN-IMS/KN-IMS/Backend/internal"
+	"github.com/KN-IG/KN-IG/Backend/internal"
 )
 
 // mockAlertStore : AlertStore 테스트용 mock

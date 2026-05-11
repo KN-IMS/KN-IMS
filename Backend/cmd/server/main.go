@@ -5,10 +5,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/KN-IMS/KN-IMS/Backend/internal/api"
-	"github.com/KN-IMS/KN-IMS/Backend/internal/collector"
-	"github.com/KN-IMS/KN-IMS/Backend/internal/engine"
-	"github.com/KN-IMS/KN-IMS/Backend/internal/store"
+	"github.com/KN-IG/KN-IG/Backend/internal/api"
+	"github.com/KN-IG/KN-IG/Backend/internal/collector"
+	"github.com/KN-IG/KN-IG/Backend/internal/engine"
+	"github.com/KN-IG/KN-IG/Backend/internal/store"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-# src/lkm/Makefile — im_lkm 커널 모듈 빌드
+# src/lkm/Makefile — ig_lkm 커널 모듈 빌드
 #
 # 커널 버전을 자동 감지하여 최적의 hooks 구현을 선택한다.
 #
@@ -63,19 +63,19 @@ else
 endif
 
 # ── 빌드 대상 ─────────────────────────────────────────────
-obj-m := im_lkm.o
+obj-m := ig_lkm.o
 
-im_lkm-y := im_lkm_main.o    \
-             im_lkm_policy.o  \
-             im_lkm_events.o  \
-             im_lkm_chardev.o \
+ig_lkm-y := ig_lkm_main.o    \
+             ig_lkm_policy.o  \
+             ig_lkm_events.o  \
+             ig_lkm_chardev.o \
              $(HOOKS_OBJ)
 
 ccflags-y := -Wall -Wextra -I$(src)
 
 # ── 기본 타깃 ─────────────────────────────────────────────
 all:
-	@echo "  [im_lkm] kernel=$(KVER)  hooks=$(HOOKS_TAG)"
+	@echo "  [ig_lkm] kernel=$(KVER)  hooks=$(HOOKS_TAG)"
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean:
@@ -83,17 +83,17 @@ clean:
 
 # ── 개발 편의 타깃 ────────────────────────────────────────
 load: all
-	sudo insmod im_lkm.ko
+	sudo insmod ig_lkm.ko
 	@echo "--- dmesg ---"
 	@dmesg | tail -5
 
 unload:
-	-sudo rmmod im_lkm
+	-sudo rmmod ig_lkm
 	@dmesg | tail -3
 
 reload: unload load
 
 dev-perm:
-	sudo chmod 666 /dev/im_lkm
+	sudo chmod 666 /dev/ig_lkm
 
 .PHONY: all clean load unload reload dev-perm
