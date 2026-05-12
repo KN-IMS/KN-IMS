@@ -37,7 +37,7 @@
  *   SIGUSR1         → 예약됨 (현재 런타임 watch 변경 미사용)
  */
 
-#include <stdarg.h>
+#include <stdarg.h> 
 #include <fcntl.h>
 #include <getopt.h>
 #include <sys/utsname.h>
@@ -753,7 +753,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (!g_ebpf_active && !g_lkm_active) {
-        LOG_ERROR_IG("eBPF/LKM 모두 비활성 — inotify fallback은 사용하지 않음. eBPF 또는 LKM 환경을 먼저 설정하세요.");
+        LOG_ERROR_IG("eBPF/LKM 모두 비활성 — eBPF 또는 LKM 환경을 먼저 설정하세요.");
         goto done;
     }
 
