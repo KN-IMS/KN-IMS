@@ -37,7 +37,7 @@
  *   SIGUSR1         → 예약됨 (현재 런타임 watch 변경 미사용)
  */
 
-#include <stdarg.h>
+#include <stdarg.h> 
 #include <fcntl.h>
 #include <getopt.h>
 #include <sys/utsname.h>
@@ -60,6 +60,7 @@
 #include "transport/heartbeat.h"
 #include "scanner/baseline.h"
 #include "lkm/lkm_client.h"
+#include "scanner/pid_ancestry.h"
 
 /* ── 전역 변수 ─────────────────────────────────── */
 FILE            *g_log_fp    = NULL;
@@ -184,14 +185,56 @@ static void *lkm_event_thread(void *arg)
         ev.source    = IG_SOURCE_LKM;
         ev.pid       = (pid_t)lev.pid;
         ev.uid       = (uid_t)lev.uid;
+        ev.dev       = lev.dev;
+        ev.ino       = lev.ino;
+        ev.blocked   = (int)lev.blocked;
         ev.timestamp = (time_t)(lev.timestamp_ns / 1000000000LL);
         strncpy(ev.path, lev.path, sizeof(ev.path) - 1);
         strncpy(ev.comm, lev.comm, sizeof(ev.comm) - 1);
 
-        LOG_ALERT_IG("[lkm] %s %s %s(pid=%d uid=%d comm=%s)",
+        /* DEBUG: ABI/캡처 진단 — 검증 끝나면 제거 */
+        LOG_INFO_IG("[lkm-dbg] ev_sz=%zu chain_entry_sz=%zu chain_depth=%u trunc=%u",
+                     sizeof(struct ig_lkm_event),
+                     sizeof(struct ig_lkm_chain_entry),
+                     (unsigned)lev.chain_depth,
+                     (unsigned)lev.chain_truncated);
+
+        /* PID ancestry chain — 커널이 race-free로 캡처해 준 chain 사용 */
+        memset(&ev.chain, 0, sizeof(ev.chain));
+        ev.chain.depth     = lev.chain_depth;
+        ev.chain.truncated = lev.chain_truncated;
+        for (int ci = 0; ci < lev.chain_depth && ci < IG_PA_MAX_DEPTH; ci++) {
+            const struct ig_lkm_chain_entry *src = &lev.chain[ci];
+            ig_proc_info_t *dst = &ev.chain.chain[ci];
+            dst->pid           = (pid_t)src->pid;
+            dst->ppid          = (pid_t)src->ppid;
+            dst->uid           = (uid_t)src->uid;
+            dst->euid          = (uid_t)src->euid;
+            dst->sid           = (pid_t)src->sid;
+            dst->start_time_ns = src->start_time_ns;
+            memcpy(dst->comm, src->comm, sizeof(dst->comm));
+            dst->comm[sizeof(dst->comm) - 1] = '\0';
+            /* tty 복사 — kernel chain entry는 16, user는 32 */
+            strncpy(dst->tty, src->tty, sizeof(dst->tty) - 1);
+            dst->tty[sizeof(dst->tty) - 1] = '\0';
+            /* fork-time 캐시가 채워줬으면 exe/cmdline 직접 복사 */
+            strncpy(dst->exe,     src->exe,     sizeof(dst->exe) - 1);
+            dst->exe[sizeof(dst->exe) - 1] = '\0';
+            strncpy(dst->cmdline, src->cmdline, sizeof(dst->cmdline) - 1);
+            dst->cmdline[sizeof(dst->cmdline) - 1] = '\0';
+            /* 캐시 miss면 /proc fallback (race 시 빈 문자열 유지) */
+            if (!dst->exe[0] || !dst->cmdline[0])
+                ig_pa_enrich_entry(dst);
+        }
+        if (ev.chain.depth > 0) ev.sid = ev.chain.chain[0].sid;
+
+        char chain_full[8192];
+        ig_pa_format_full(&ev.chain, chain_full, sizeof(chain_full));
+        LOG_ALERT_IG("[lkm] %s %s%s actor=%s(pid=%d uid=%d) chain:%s",
                       ev.path, ig_event_type_str(ev.type),
-                      lev.blocked ? "  [BLOCKED]" : "",
-                      ev.pid, ev.uid, ev.comm);
+                      lev.blocked ? " [BLOCKED]" : "",
+                      ev.comm, ev.pid, ev.uid,
+                      chain_full);
 
         ig_queue_push(queue, &ev);
     }
@@ -710,7 +753,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (!g_ebpf_active && !g_lkm_active) {
-        LOG_ERROR_IG("eBPF/LKM 모두 비활성 — inotify fallback은 사용하지 않음. eBPF 또는 LKM 환경을 먼저 설정하세요.");
+        LOG_ERROR_IG("eBPF/LKM 모두 비활성 — eBPF 또는 LKM 환경을 먼저 설정하세요.");
         goto done;
     }
 
@@ -792,6 +835,12 @@ int main(int argc, char *argv[]) {
         else
             LOG_INFO_IG("[transport] heartbeat 스레드 시작 완료");
     }
+
+    /* ── PID ancestry 캐시 ───────────────────── */
+    if (ig_pa_cache_init(1024) < 0)
+        LOG_WARN_IG("[pa] 캐시 초기화 실패 — uncached fallback 사용");
+    else
+        LOG_INFO_IG("[pa] PID ancestry 캐시 초기화 (capacity=1024)");
 
     /* ── 로컬 베이스라인 구축 ─────────────────── */
     if (ig_baseline_db_init(&g_baseline_db) < 0) {
@@ -903,6 +952,7 @@ int main(int argc, char *argv[]) {
     free(queue);
 
     ig_baseline_db_free(&g_baseline_db);
+    ig_pa_cache_free();
 
 done:
     pid_lock_release();    /* fcntl 잠금 해제 + PID 파일 삭제 */

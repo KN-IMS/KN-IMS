@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" font-family="Inter, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <!-- Layer card gradients -->
+    <linearGradient id="kernelGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="agentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#064e3b"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <linearGradient id="backendGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c2d12"/>
+      <stop offset="100%" stop-color="#431407"/>
+    </linearGradient>
+    <linearGradient id="frontendGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#713f12"/>
+      <stop offset="100%" stop-color="#422006"/>
+    </linearGradient>
+
+    <!-- Module cards -->
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+
+    <!-- Arrow markers -->
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowPink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#f472b6"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#34d399"/>
+    </marker>
+    <marker id="arrowViolet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#a78bfa"/>
+    </marker>
+
+    <!-- Glow filter -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dy="3" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.45"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+
+  <!-- Subtle grid -->
+  <g stroke="#ffffff" stroke-opacity="0.03" stroke-width="1">
+    <path d="M0 100 H1600 M0 200 H1600 M0 300 H1600 M0 400 H1600 M0 500 H1600 M0 600 H1600 M0 700 H1600 M0 800 H1600 M0 900 H1600"/>
+    <path d="M100 0 V1000 M200 0 V1000 M300 0 V1000 M400 0 V1000 M500 0 V1000 M600 0 V1000 M700 0 V1000 M800 0 V1000 M900 0 V1000 M1000 0 V1000 M1100 0 V1000 M1200 0 V1000 M1300 0 V1000 M1400 0 V1000 M1500 0 V1000"/>
+  </g>
+
+  <!-- Title -->
+  <text x="40" y="52" font-size="26" font-weight="700" fill="#f8fafc" letter-spacing="0.5">KN-IMS</text>
+  <text x="170" y="52" font-size="20" font-weight="300" fill="#94a3b8">Policy-based Integrity Guard  ·  Data Flow</text>
+
+  <!-- Legend -->
+  <g transform="translate(820,28)" font-size="11" fill="#cbd5e1">
+    <rect x="0" y="0" width="500" height="36" rx="18" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.08"/>
+    <line x1="16" y1="18" x2="46" y2="18" stroke="#22d3ee" stroke-width="2.5"/>
+    <text x="52" y="22">syscall / hook</text>
+    <line x1="148" y1="18" x2="178" y2="18" stroke="#34d399" stroke-width="2.5" stroke-dasharray="4 3"/>
+    <text x="184" y="22">policy inject</text>
+    <line x1="278" y1="18" x2="308" y2="18" stroke="#fbbf24" stroke-width="2.5"/>
+    <text x="314" y="22">mTLS frame</text>
+    <line x1="406" y1="18" x2="436" y2="18" stroke="#f472b6" stroke-width="2.5"/>
+    <text x="442" y="22">REST / SSE</text>
+  </g>
+
+  <!-- ============== KERNEL LAYER ============== -->
+  <g filter="url(#softShadow)">
+    <rect x="40" y="780" width="1520" height="180" rx="18" fill="url(#kernelGrad)" stroke="#475569" stroke-width="1.2"/>
+  </g>
+  <text x="60" y="810" font-size="13" font-weight="700" fill="#94a3b8" letter-spacing="2">KERNEL  ·  LINUX 3.10+ / 5.8+</text>
+
+  <!-- VFS bar -->
+  <rect x="60" y="822" width="1480" height="34" rx="8" fill="#ffffff" fill-opacity="0.05" stroke="#64748b" stroke-opacity="0.4"/>
+  <text x="800" y="843" text-anchor="middle" font-size="13" font-weight="600" fill="#cbd5e1">VFS  ·  open · read · write · unlink · rename · chmod · setattr</text>
+
+  <!-- eBPF LSM -->
+  <g transform="translate(80,870)">
+    <rect width="430" height="78" rx="12" fill="url(#card)" stroke="#22d3ee" stroke-opacity="0.6"/>
+    <circle cx="22" cy="22" r="6" fill="#22d3ee"/>
+    <text x="38" y="27" font-size="14" font-weight="700" fill="#e0f2fe">eBPF LSM  (≥ 5.8)</text>
+    <text x="38" y="48" font-size="11" fill="#94a3b8">7 hooks · file_open · path_unlink · path_rename · ...</text>
+    <text x="38" y="65" font-size="11" fill="#94a3b8">policy_map {dev,ino} · audit_rb 256KB ringbuf</text>
+  </g>
+
+  <!-- LKM -->
+  <g transform="translate(560,870)">
+    <rect width="430" height="78" rx="12" fill="url(#card)" stroke="#34d399" stroke-opacity="0.6"/>
+    <circle cx="22" cy="22" r="6" fill="#34d399"/>
+    <text x="38" y="27" font-size="14" font-weight="700" fill="#d1fae5">LKM kprobe  (≥ 3.10)</text>
+    <text x="38" y="48" font-size="11" fill="#94a3b8">vfs_write · vfs_unlink · vfs_rename</text>
+    <text x="38" y="65" font-size="11" fill="#94a3b8">policy hashtable · KFIFO · /dev/fim_lkm</text>
+  </g>
+
+  <!-- inotify -->
+  <g transform="translate(1040,870)">
+    <rect width="480" height="78" rx="12" fill="url(#card)" stroke="#94a3b8" stroke-opacity="0.5"/>
+    <circle cx="22" cy="22" r="6" fill="#94a3b8"/>
+    <text x="38" y="27" font-size="14" font-weight="700" fill="#e2e8f0">inotify  (fallback)</text>
+    <text x="38" y="48" font-size="11" fill="#94a3b8">IN_MODIFY · IN_DELETE · IN_ATTRIB</text>
+    <text x="38" y="65" font-size="11" fill="#94a3b8">audit-only · cannot block</text>
+  </g>
+
+  <!-- Process source -->
+  <g transform="translate(680,720)">
+    <rect width="240" height="44" rx="22" fill="#0f172a" stroke="#22d3ee" stroke-opacity="0.5"/>
+    <text x="120" y="28" text-anchor="middle" font-size="12" font-weight="600" fill="#e0f2fe">Any process · syscall</text>
+  </g>
+  <path d="M800 764 V822" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arrowCyan)"/>
+
+  <!-- ============== AGENT LAYER ============== -->
+  <g filter="url(#softShadow)">
+    <rect x="40" y="430" width="1520" height="260" rx="18" fill="url(#agentGrad)" stroke="#10b981" stroke-opacity="0.5" stroke-width="1.2"/>
+  </g>
+  <text x="60" y="460" font-size="13" font-weight="700" fill="#6ee7b7" letter-spacing="2">AGENT  ·  C · pthreads · OpenSSL</text>
+
+  <!-- Realtime monitors row -->
+  <g transform="translate(80,478)">
+    <rect width="430" height="74" rx="12" fill="url(#card)" stroke="#22d3ee" stroke-opacity="0.5"/>
+    <text x="20" y="26" font-size="13" font-weight="700" fill="#a5f3fc">Realtime Monitors</text>
+    <rect x="20"  y="38" width="120" height="24" rx="6" fill="#0e7490" fill-opacity="0.35" stroke="#22d3ee" stroke-opacity="0.5"/>
+    <text x="80" y="55" text-anchor="middle" font-size="11" fill="#cffafe">eBPF poll thread</text>
+    <rect x="155" y="38" width="120" height="24" rx="6" fill="#065f46" fill-opacity="0.35" stroke="#34d399" stroke-opacity="0.5"/>
+    <text x="215" y="55" text-anchor="middle" font-size="11" fill="#d1fae5">LKM read thread</text>
+    <rect x="290" y="38" width="120" height="24" rx="6" fill="#334155" fill-opacity="0.35" stroke="#94a3b8" stroke-opacity="0.5"/>
+    <text x="350" y="55" text-anchor="middle" font-size="11" fill="#e2e8f0">inotify thread</text>
+  </g>
+
+  <!-- Event Queue -->
+  <g transform="translate(560,478)">
+    <rect width="220" height="74" rx="12" fill="url(#card)" stroke="#fbbf24" stroke-opacity="0.6"/>
+    <text x="110" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#fde68a">Event Queue</text>
+    <text x="110" y="46" text-anchor="middle" font-size="11" fill="#94a3b8">thread-safe FIFO</text>
+    <text x="110" y="62" text-anchor="middle" font-size="11" fill="#94a3b8">mutex · condvar</text>
+  </g>
+
+  <!-- Main Processor -->
+  <g transform="translate(820,478)">
+    <rect width="320" height="74" rx="12" fill="url(#card)" stroke="#a78bfa" stroke-opacity="0.6"/>
+    <text x="160" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#ddd6fe">Main Event Processor</text>
+    <text x="160" y="46" text-anchor="middle" font-size="11" fill="#94a3b8">pop → integrity check → re-hash</text>
+    <text x="160" y="62" text-anchor="middle" font-size="11" fill="#94a3b8">deduplicate · enrich · forward</text>
+  </g>
+
+  <!-- Transport -->
+  <g transform="translate(1180,478)">
+    <rect width="340" height="74" rx="12" fill="url(#card)" stroke="#fbbf24" stroke-opacity="0.7"/>
+    <text x="170" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#fde68a">Transport · TLS</text>
+    <text x="170" y="46" text-anchor="middle" font-size="11" fill="#94a3b8">tcp_client · protocol encode</text>
+    <text x="170" y="62" text-anchor="middle" font-size="11" fill="#94a3b8">heartbeat 30s · exp. backoff</text>
+  </g>
+
+  <!-- Scanner -->
+  <g transform="translate(80,580)">
+    <rect width="430" height="92" rx="12" fill="url(#card)" stroke="#34d399" stroke-opacity="0.55"/>
+    <text x="20" y="26" font-size="13" font-weight="700" fill="#a7f3d0">Scanner  ·  Baseline</text>
+    <text x="20" y="48" font-size="11" fill="#94a3b8">walker  →  stat()  →  SHA-256</text>
+    <text x="20" y="66" font-size="11" fill="#94a3b8">baseline DB  ·  RW-lock</text>
+    <text x="20" y="83" font-size="11" fill="#94a3b8">integrity check  (MATCH / MISMATCH / NEW)</text>
+  </g>
+
+  <!-- Policy Manager -->
+  <g transform="translate(560,580)">
+    <rect width="220" height="92" rx="12" fill="url(#card)" stroke="#34d399" stroke-opacity="0.55"/>
+    <text x="110" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="#a7f3d0">Policy Manager</text>
+    <text x="110" y="48" text-anchor="middle" font-size="11" fill="#94a3b8">config · watch list</text>
+    <text x="110" y="66" text-anchor="middle" font-size="11" fill="#94a3b8">{dev,ino} → mask,block</text>
+    <text x="110" y="83" text-anchor="middle" font-size="11" fill="#94a3b8">DENY  ·  AUDIT</text>
+  </g>
+
+  <!-- Frame format -->
+  <g transform="translate(820,580)">
+    <rect width="700" height="92" rx="12" fill="url(#card)" stroke="#fbbf24" stroke-opacity="0.5" stroke-dasharray="4 3"/>
+    <text x="350" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#fde68a">Custom Binary Frame  ·  9-byte header + payload</text>
+    <g transform="translate(20,38)">
+      <rect width="80"  height="38" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.5"/>
+      <text x="40" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#fde68a">length</text>
+      <text x="40" y="32" text-anchor="middle" font-size="9" fill="#94a3b8">u32</text>
+      <rect x="86" width="60" height="38" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.5"/>
+      <text x="116" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#fde68a">type</text>
+      <text x="116" y="32" text-anchor="middle" font-size="9" fill="#94a3b8">u8</text>
+      <rect x="152" width="80" height="38" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.5"/>
+      <text x="192" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#fde68a">seq</text>
+      <text x="192" y="32" text-anchor="middle" font-size="9" fill="#94a3b8">u32</text>
+      <rect x="238" width="420" height="38" rx="6" fill="#1e293b" stroke="#fbbf24" stroke-opacity="0.4"/>
+      <text x="448" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="#fde68a">payload  ·  REGISTER · HEARTBEAT(30s) · FILE_EVENT</text>
+      <text x="448" y="32" text-anchor="middle" font-size="9" fill="#94a3b8">agent_id · path · perm · pid · timestamp · event_type · detected_by</text>
+    </g>
+  </g>
+
+  <!-- Inner agent arrows -->
+  <!-- monitors -> queue -->
+  <path d="M510 515 H560" stroke="#22d3ee" stroke-width="2.2" fill="none" marker-end="url(#arrowCyan)"/>
+  <!-- queue -> processor -->
+  <path d="M780 515 H820" stroke="#a78bfa" stroke-width="2.2" fill="none" marker-end="url(#arrowViolet)"/>
+  <!-- processor -> transport -->
+  <path d="M1140 515 H1180" stroke="#fbbf24" stroke-width="2.2" fill="none" marker-end="url(#arrowAmber)"/>
+  <!-- scanner -> processor -->
+  <path d="M510 626 C 700 626, 780 540, 820 528" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#arrowGreen)" stroke-dasharray="0"/>
+  <!-- policy -> monitors (policy inject) -->
+  <path d="M670 580 C 670 565, 400 565, 295 552" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#arrowGreen)" stroke-dasharray="6 4"/>
+  <text x="430" y="565" font-size="10" fill="#6ee7b7" font-style="italic">policy inject</text>
+
+  <!-- Kernel -> Agent (events up) — single bundled flow -->
+  <path d="M180 870 C 180 760, 160 700, 145 552" stroke="#22d3ee" stroke-width="2.2" fill="none" marker-end="url(#arrowCyan)"/>
+  <path d="M620 870 C 620 760, 200 720, 165 552" stroke="#22d3ee" stroke-width="2" fill="none" marker-end="url(#arrowCyan)" stroke-opacity="0.85"/>
+  <path d="M1180 870 C 1180 760, 230 740, 185 552" stroke="#22d3ee" stroke-width="1.5" fill="none" marker-end="url(#arrowCyan)" stroke-opacity="0.55"/>
+  <text x="200" y="720" font-size="11" fill="#67e8f9" font-style="italic">events upstream</text>
+
+  <!-- Agent -> Kernel policy inject -->
+  <path d="M680 672 C 680 740, 295 760, 295 870" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#arrowGreen)" stroke-dasharray="6 4"/>
+  <path d="M680 672 C 680 740, 775 760, 775 870" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#arrowGreen)" stroke-dasharray="6 4"/>
+  <text x="700" y="725" font-size="11" fill="#6ee7b7" font-style="italic">policy inject (BPF map / ioctl)</text>
+
+  <!-- ============== BACKEND LAYER ============== -->
+  <g filter="url(#softShadow)">
+    <rect x="40" y="180" width="1080" height="220" rx="18" fill="url(#backendGrad)" stroke="#fb923c" stroke-opacity="0.55" stroke-width="1.2"/>
+  </g>
+  <text x="60" y="210" font-size="13" font-weight="700" fill="#fdba74" letter-spacing="2">BACKEND  ·  Go · Gin · Goroutines</text>
+
+  <!-- Collector -->
+  <g transform="translate(60,228)">
+    <rect width="320" height="156" rx="12" fill="url(#card)" stroke="#fbbf24" stroke-opacity="0.7"/>
+    <text x="20" y="28" font-size="14" font-weight="700" fill="#fde68a">Collector  ·  TCP :9000</text>
+    <text x="20" y="50" font-size="11" fill="#fed7aa">mTLS server  ·  RequireAndVerifyClientCert</text>
+    <text x="20" y="68" font-size="11" fill="#94a3b8">per-agent goroutine</text>
+    <text x="20" y="86" font-size="11" fill="#94a3b8">handshake (10s) · cert verify</text>
+    <text x="20" y="106" font-size="11" fill="#94a3b8">protocol decode  →  AgentSession</text>
+    <text x="20" y="126" font-size="11" fill="#94a3b8">REGISTER  ·  HEARTBEAT  ·  FILE_EVENT</text>
+    <text x="20" y="146" font-size="11" fill="#94a3b8">publish to subscribers</text>
+  </g>
+
+  <!-- Engine -->
+  <g transform="translate(400,228)">
+    <rect width="300" height="156" rx="12" fill="url(#card)" stroke="#a78bfa" stroke-opacity="0.65"/>
+    <text x="20" y="28" font-size="14" font-weight="700" fill="#ddd6fe">Engine  ·  EventProcessor</text>
+    <text x="20" y="52" font-size="11" fill="#c4b5fd">Burst Detection</text>
+    <text x="20" y="70" font-size="11" fill="#94a3b8">window: 60s sliding</text>
+    <text x="20" y="88" font-size="11" fill="#94a3b8">≥ 100 events  →  HIGH alert</text>
+    <text x="20" y="112" font-size="11" fill="#c4b5fd">Severity Routing</text>
+    <text x="20" y="130" font-size="11" fill="#94a3b8">HIGH · MEDIUM · LOW</text>
+    <text x="20" y="148" font-size="11" fill="#94a3b8">→ alerts table</text>
+  </g>
+
+  <!-- REST API -->
+  <g transform="translate(720,228)">
+    <rect width="380" height="156" rx="12" fill="url(#card)" stroke="#f472b6" stroke-opacity="0.65"/>
+    <text x="20" y="28" font-size="14" font-weight="700" fill="#fbcfe8">REST API  ·  HTTP :8080</text>
+    <text x="20" y="50" font-size="11" fill="#94a3b8">GET   /api/agents  ·  /api/events  ·  /api/alerts</text>
+    <text x="20" y="68" font-size="11" fill="#94a3b8">POST  /api/scan  ·  /api/baseline</text>
+    <text x="20" y="86" font-size="11" fill="#94a3b8">PATCH /api/alerts/:id/resolve</text>
+    <text x="20" y="112" font-size="12" font-weight="700" fill="#f9a8d4">SSE  ·  /api/events/stream</text>
+    <text x="20" y="130" font-size="11" fill="#94a3b8">EventSource subscriber pool</text>
+    <text x="20" y="148" font-size="11" fill="#94a3b8">push file_events real-time</text>
+  </g>
+
+  <!-- Database -->
+  <g transform="translate(1170,228)" filter="url(#softShadow)">
+    <ellipse cx="180" cy="20" rx="180" ry="14" fill="#312e81" stroke="#818cf8" stroke-opacity="0.7"/>
+    <rect x="0" y="20" width="360" height="120" fill="#312e81" stroke="#818cf8" stroke-opacity="0.7"/>
+    <ellipse cx="180" cy="140" rx="180" ry="14" fill="#1e1b4b" stroke="#818cf8" stroke-opacity="0.7"/>
+    <text x="180" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="#e0e7ff">MySQL 8.0</text>
+    <text x="180" y="80" text-anchor="middle" font-size="11" fill="#c7d2fe">agents</text>
+    <text x="180" y="98" text-anchor="middle" font-size="11" fill="#c7d2fe">file_events</text>
+    <text x="180" y="116" text-anchor="middle" font-size="11" fill="#c7d2fe">alerts</text>
+  </g>
+
+  <!-- Backend internal arrows -->
+  <path d="M380 306 H400" stroke="#a78bfa" stroke-width="2.2" fill="none" marker-end="url(#arrowViolet)"/>
+  <path d="M700 306 H720" stroke="#f472b6" stroke-width="2.2" fill="none" marker-end="url(#arrowPink)"/>
+  <path d="M1100 306 H1170" stroke="#818cf8" stroke-width="2.2" fill="none" marker-end="url(#arrowPink)"/>
+  <path d="M380 350 C 500 380, 1100 380, 1170 320" stroke="#818cf8" stroke-width="1.8" fill="none" marker-end="url(#arrowPink)" stroke-opacity="0.7"/>
+
+  <!-- Agent -> Backend (mTLS uplink) -->
+  <path d="M1350 478 C 1350 440, 700 440, 220 384" stroke="#fbbf24" stroke-width="3" fill="none" marker-end="url(#arrowAmber)"/>
+  <g transform="translate(900,406)">
+    <rect x="-90" y="-16" width="180" height="26" rx="13" fill="#0f172a" stroke="#fbbf24" stroke-opacity="0.7"/>
+    <text x="0" y="2" text-anchor="middle" font-size="11" font-weight="700" fill="#fde68a">mTLS TCP :9000</text>
+  </g>
+
+  <!-- ============== FRONTEND ============== -->
+  <g filter="url(#softShadow)">
+    <rect x="1180" y="60" width="380" height="120" rx="18" fill="url(#frontendGrad)" stroke="#fbbf24" stroke-opacity="0.55" stroke-width="1.2"/>
+  </g>
+  <text x="1200" y="88" font-size="13" font-weight="700" fill="#fde68a" letter-spacing="2">FRONTEND  ·  HTML5 · Vanilla JS · Tailwind</text>
+  <g transform="translate(1200,100)">
+    <rect width="80"  height="60" rx="10" fill="url(#card)" stroke="#fde68a" stroke-opacity="0.4"/>
+    <text x="40" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#fef3c7">Agents</text>
+    <text x="40" y="44" text-anchor="middle" font-size="9" fill="#94a3b8">dashboard</text>
+    <rect x="90" y="0" width="80" height="60" rx="10" fill="url(#card)" stroke="#fde68a" stroke-opacity="0.4"/>
+    <text x="130" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#fef3c7">Events</text>
+    <text x="130" y="44" text-anchor="middle" font-size="9" fill="#94a3b8">table · filter</text>
+    <rect x="180" y="0" width="80" height="60" rx="10" fill="url(#card)" stroke="#fde68a" stroke-opacity="0.4"/>
+    <text x="220" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#fef3c7">Alerts</text>
+    <text x="220" y="44" text-anchor="middle" font-size="9" fill="#94a3b8">realtime</text>
+    <rect x="270" y="0" width="80" height="60" rx="10" fill="url(#card)" stroke="#fde68a" stroke-opacity="0.4"/>
+    <text x="310" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="#fef3c7">Scan</text>
+    <text x="310" y="44" text-anchor="middle" font-size="9" fill="#94a3b8">baseline</text>
+  </g>
+
+  <!-- Backend -> Frontend -->
+  <path d="M1100 270 C 1140 200, 1170 160, 1180 130" stroke="#f472b6" stroke-width="3" fill="none" marker-end="url(#arrowPink)"/>
+  <g transform="translate(1130,200)">
+    <rect x="-60" y="-14" width="120" height="24" rx="12" fill="#0f172a" stroke="#f472b6" stroke-opacity="0.7"/>
+    <text x="0" y="2" text-anchor="middle" font-size="11" font-weight="700" fill="#fbcfe8">REST + SSE</text>
+  </g>
+
+  <!-- USER -->
+  <g transform="translate(1530,80)">
+    <circle cx="0" cy="0" r="10" fill="#fde68a"/>
+    <text x="0" y="-18" text-anchor="middle" font-size="12" font-weight="700" fill="#fde68a">User</text>
+  </g>
+  <path d="M1530 90 V108" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arrowAmber)"/>
+
+  <!-- Numbered flow steps -->
+  <g font-size="11" font-weight="700">
+    <circle cx="60" cy="745" r="12" fill="#22d3ee"/><text x="60" y="749" text-anchor="middle" fill="#0f172a">1</text>
+    <text x="80" y="749" fill="#cffafe">syscall hits VFS</text>
+
+    <circle cx="60" cy="700" r="12" fill="#22d3ee"/><text x="60" y="704" text-anchor="middle" fill="#0f172a">2</text>
+    <text x="80" y="704" fill="#cffafe">kernel hook → policy lookup → audit / DENY</text>
+
+    <circle cx="60" cy="555" r="12" fill="#a78bfa"/><text x="60" y="559" text-anchor="middle" fill="#0f172a">3</text>
+    <text x="80" y="559" fill="#ede9fe">agent dequeues · re-hash · diff baseline</text>
+
+    <circle cx="1530" cy="455" r="12" fill="#fbbf24"/><text x="1530" y="459" text-anchor="middle" fill="#0f172a">4</text>
+    <text x="1520" y="459" text-anchor="end" fill="#fde68a">encrypt + ship over mTLS</text>
+
+    <circle cx="60" cy="408" r="12" fill="#fbbf24"/><text x="60" y="412" text-anchor="middle" fill="#0f172a">5</text>
+    <text x="80" y="412" fill="#fde68a">collector decode → store → publish</text>
+
+    <circle cx="1140" cy="206" r="12" fill="#f472b6"/><text x="1140" y="210" text-anchor="middle" fill="#0f172a">6</text>
+    <text x="1128" y="210" text-anchor="end" fill="#fbcfe8">SSE push to browser</text>
+  </g>
+
+  <!-- Footer note -->
+  <text x="40" y="985" font-size="10" fill="#64748b">Inode-based policy  ·  SHA-256 baseline  ·  mTLS 1.2+  ·  Burst ≥100 ev/min → HIGH</text>
+  <text x="1560" y="985" text-anchor="end" font-size="10" fill="#64748b">KN-IMS · Capstone</text>
+</svg>

@@ -20,6 +20,7 @@ static inline uint64_t stat_dev_to_kernel(uint64_t st_dev)
 #include <bpf/libbpf.h>
 
 #include "realtime/monitor.h"
+#include "scanner/pid_ancestry.h"
 #include "ig_trace_api.h"
 #include "ig_trace.skel.h"
 
@@ -47,6 +48,75 @@ struct audit_event {
 
 static volatile sig_atomic_t g_running = 1;
 static struct ig_trace_bpf *g_skel = NULL;
+
+/* BPF proc_map과 동일 레이아웃 — ig_trace.bpf.c struct ig_proc_entry */
+struct bpf_proc_entry {
+    __u32 pid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 euid;
+    __u32 sid;
+    __u32 _pad;
+    char  comm[16];
+    char  tty[16];
+    __u64 start_time_ns;
+    char  cmdline[160];
+};
+
+/*
+ * ig_ebpf_chain_collect — BPF proc_map 우선, miss 시 /proc fallback.
+ * 결과는 ig_pid_chain_t 형식으로 채움.
+ */
+static void ig_ebpf_chain_collect(pid_t start_pid, ig_pid_chain_t *out)
+{
+    int map_fd = -1;
+    pid_t cur = start_pid;
+    int i;
+
+    memset(out, 0, sizeof(*out));
+    if (start_pid <= 0) return;
+
+    if (g_skel) map_fd = bpf_map__fd(g_skel->maps.proc_map);
+
+    for (i = 0; i < IG_PA_MAX_DEPTH; i++) {
+        ig_proc_info_t *o = &out->chain[i];
+        struct bpf_proc_entry e;
+        int got = 0;
+
+        if (map_fd >= 0) {
+            __u32 key = (__u32)cur;
+            if (bpf_map_lookup_elem(map_fd, &key, &e) == 0) got = 1;
+        }
+
+        if (got) {
+            o->pid           = (pid_t)e.pid;
+            o->ppid          = (pid_t)e.ppid;
+            o->uid           = (uid_t)e.uid;
+            o->euid          = (uid_t)e.euid;
+            o->sid           = (pid_t)e.sid;
+            o->start_time_ns = e.start_time_ns;
+            memcpy(o->comm, e.comm, sizeof(o->comm));
+            o->comm[sizeof(o->comm)-1] = '\0';
+            strncpy(o->tty,     e.tty,     sizeof(o->tty)-1);
+            strncpy(o->cmdline, e.cmdline, sizeof(o->cmdline)-1);
+            /* exe는 BPF 측에 없음 — /proc 보강 */
+            ig_pa_enrich_entry(o);
+        } else {
+            /* 캐시 miss — /proc 단독 resolve (단명 프로세스면 빈 결과) */
+            ig_pid_chain_t tmp;
+            if (ig_pa_resolve(cur, &tmp) > 0) {
+                *o = tmp.chain[0];
+            } else {
+                out->truncated = 1;
+                break;
+            }
+        }
+        out->depth = i + 1;
+        if (o->ppid <= 1 || o->ppid == cur) break;
+        cur = o->ppid;
+        if (i == IG_PA_MAX_DEPTH - 1) out->truncated = 1;
+    }
+}
 static struct ring_buffer   *g_rb   = NULL;
 
 /* ── 유저랜드 역방향 경로 캐시 {dev, ino} → path ──
@@ -371,15 +441,22 @@ static int handle_audit_event(void *ctx, void *data, size_t data_sz)
 
     path_cache_get(e->dev, e->ino, path, sizeof(path));
 
-    /* eBPF 고유 정보 (DENY/AUDIT 여부, 훅 이름) 로그 */
-    LOG_ALERT_IG("[ebpf] %s %s hook=%s path=%s pid=%u uid=%u comm=%s",
+    /* chain 먼저 수집 — alert 로그와 queue push 양쪽에서 재사용 */
+    ig_pid_chain_t chain;
+    ig_ebpf_chain_collect((pid_t)e->pid, &chain);
+
+    char chain_full[8192];
+    ig_pa_format_full(&chain, chain_full, sizeof(chain_full));
+
+    LOG_ALERT_IG("[ebpf] %s %s hook=%s path=%s pid=%u uid=%u comm=%s chain:%s",
                   e->denied ? "DENY" : "AUDIT",
                   op_mask_to_str(e->op_mask),
                   hook_id_to_str(e->hook_id),
                   path,
                   e->pid,
                   e->uid,
-                  e->comm);
+                  e->comm,
+                  chain_full);
 
     /* 파일 삭제 이벤트: inode 해제 → policy_map + path_cache 즉시 제거
      * (제거하지 않으면 OS의 inode 재사용 시 다른 파일이 삭제된 파일로 오인됨) */
@@ -401,6 +478,11 @@ static int handle_audit_event(void *ctx, void *data, size_t data_sz)
         ev.timestamp = (time_t)(e->ts_ns / 1000000000ULL);
         ev.pid       = (pid_t)e->pid;
         ev.uid       = (uid_t)e->uid;
+        ev.dev       = e->dev;
+        ev.ino       = e->ino;
+        ev.blocked   = (int)e->denied;
+        ev.chain     = chain;
+        if (chain.depth > 0) ev.sid = chain.chain[0].sid;
         strncpy(ev.path, path, IG_MAX_PATH - 1);
         strncpy(ev.comm, e->comm, sizeof(ev.comm) - 1);
 

@@ -65,10 +65,11 @@ endif
 # ── 빌드 대상 ─────────────────────────────────────────────
 obj-m := ig_lkm.o
 
-ig_lkm-y := ig_lkm_main.o    \
-             ig_lkm_policy.o  \
-             ig_lkm_events.o  \
-             ig_lkm_chardev.o \
+ig_lkm-y := ig_lkm_main.o       \
+             ig_lkm_policy.o     \
+             ig_lkm_events.o     \
+             ig_lkm_chardev.o    \
+             ig_lkm_proc_cache.o \
              $(HOOKS_OBJ)
 
 ccflags-y := -Wall -Wextra -I$(src)

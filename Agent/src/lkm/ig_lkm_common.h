@@ -39,6 +39,32 @@ struct ig_lkm_policy_req {
     char     path[256];    /* 이벤트 로깅용 경로 (선택) */
 };
 
+/* ── 프로세스 계보 (chain) ─────────────────
+ * hook 발동시 current → real_parent 따라가며 캡처 (race-free).
+ * kernel context에서 mm 접근(exe/cmdline)은 비용/안전성 문제로 생략.
+ * 유저 측에서 /proc 으로 best-effort 채워넣음.
+ */
+#define IG_LKM_CHAIN_MAX 16
+
+#define IG_LKM_EXE_LEN     128
+#define IG_LKM_CMDLINE_LEN 256
+#define IG_LKM_TTY_LEN     16
+
+struct ig_lkm_chain_entry {
+    uint32_t pid;
+    uint32_t ppid;
+    uint32_t uid;            /* real */
+    uint32_t euid;           /* effective */
+    uint32_t sid;
+    uint32_t _pad0;
+    char     comm[16];
+    char     tty[IG_LKM_TTY_LEN];   /* "pts/1" / "tty1" / "" */
+    uint64_t start_time_ns;  /* task->start_boottime / real_start_time → ns */
+    /* fork-time 캐시에서 채움. 캐시 miss 시 빈 문자열 */
+    char     exe[IG_LKM_EXE_LEN];
+    char     cmdline[IG_LKM_CMDLINE_LEN];
+};
+
 /* ── 이벤트 구조체 (커널 → 유저) ─────────── */
 struct ig_lkm_event {
     uint64_t dev;
@@ -50,6 +76,11 @@ struct ig_lkm_event {
     char     comm[16];     /* 프로세스 이름 */
     char     path[256];    /* 정책에 저장된 경로 */
     int64_t  timestamp_ns; /* ktime_get_real_ns() */
+    uint8_t  chain_depth;
+    uint8_t  chain_truncated;
+    uint16_t _pad1;
+    uint32_t _pad2;
+    struct ig_lkm_chain_entry chain[IG_LKM_CHAIN_MAX];
 };
 
 /* ── ioctl 명령어 ────────────────────────── */

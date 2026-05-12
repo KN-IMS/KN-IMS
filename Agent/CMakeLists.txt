@@ -35,6 +35,7 @@ set(CORE_SRCS
 set(SCANNER_SRCS
     src/scanner/walker.c
     src/scanner/baseline.c
+    src/scanner/pid_ancestry.c
 )
 
 set(EBPF_SRCS "")
