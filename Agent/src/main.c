@@ -37,7 +37,7 @@
  *   SIGUSR1         → 예약됨 (현재 런타임 watch 변경 미사용)
  */
 
-#include <stdarg.h> 
+#include <stdarg.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <sys/utsname.h>
@@ -47,6 +47,10 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <termios.h>
+#include <sys/stat.h>
+#include <stdlib.h>
 #include "realtime/monitor.h"
 #ifdef HAVE_LIBBPF
 #include "ebpf/ig_trace_api.h"
@@ -60,6 +64,7 @@
 #include "transport/heartbeat.h"
 #include "scanner/baseline.h"
 #include "lkm/lkm_client.h"
+#include "enroll/enroll.h"
 #include "scanner/pid_ancestry.h"
 
 /* ── 전역 변수 ─────────────────────────────────── */
@@ -579,10 +584,129 @@ static void get_local_ip(const char *server_host, int port, char *buf, size_t le
     close(sock);
 }
 
+
+static void trim_input(char *buf) {
+    if (!buf) return;
+    size_t n = strlen(buf);
+    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r' ||
+                     buf[n - 1] == ' ' || buf[n - 1] == '\t')) {
+        buf[--n] = '\0';
+    }
+}
+
+static int read_interactive_value(const char *prompt, char *buf, size_t len, int echo) {
+    if (!prompt || !buf || len == 0) return -1;
+    memset(buf, 0, len);
+
+    struct termios oldt, newt;
+    int restore = 0;
+    if (!echo && isatty(STDIN_FILENO) && tcgetattr(STDIN_FILENO, &oldt) == 0) {
+        newt = oldt;
+        newt.c_lflag &= ~(ECHO);
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &newt) == 0) restore = 1;
+    }
+
+    printf("%s", prompt);
+    fflush(stdout);
+    if (!fgets(buf, (int)len, stdin)) {
+        if (restore) tcsetattr(STDIN_FILENO, TCSAFLUSH, &oldt);
+        if (!echo) printf("\n");
+        return -1;
+    }
+    if (restore) tcsetattr(STDIN_FILENO, TCSAFLUSH, &oldt);
+    if (!echo) printf("\n");
+
+    if (!strchr(buf, '\n') && strlen(buf) == len - 1) {
+        int ch;
+        while ((ch = getchar()) != '\n' && ch != EOF) {}
+        return -1;
+    }
+    trim_input(buf);
+    return buf[0] ? 0 : -1;
+}
+
+static uint8_t parse_enroll_monitor_type(void) {
+    const char *raw = getenv("IG_ENROLL_MONITOR_TYPE");
+    if (!raw || raw[0] == '\0') return IG_MON_LKM;
+    if (strcmp(raw, "ebpf") == 0 || strcmp(raw, "eBPF") == 0) return IG_MON_EBPF;
+    if (strcmp(raw, "fanotify") == 0) return IG_MON_FANOTIFY;
+    return IG_MON_LKM;
+}
+
+static int run_enroll_mode(void) {
+    char enrollment_id[256];
+    char xor_key[512];
+    char ca_crt[512] = {0}, agent_crt[512] = {0}, agent_key[512] = {0};
+    const char *e;
+
+    const char *enroll_host = getenv("IG_ENROLL_HOST");
+    if (!enroll_host || enroll_host[0] == '\0') enroll_host = getenv("IG_SERVER_HOST");
+    if (!enroll_host || enroll_host[0] == '\0') enroll_host = "127.0.0.1";
+
+    int enroll_port = 9443;
+    const char *enroll_port_env = getenv("IG_ENROLL_PORT");
+    if (enroll_port_env && enroll_port_env[0] != '\0') enroll_port = atoi(enroll_port_env);
+
+    if ((e = getenv("IG_CA_CRT")))    strncpy(ca_crt,    e, sizeof(ca_crt) - 1);
+    else build_cert_path(ca_crt,    sizeof(ca_crt),    "ca.crt");
+    if ((e = getenv("IG_AGENT_CRT"))) strncpy(agent_crt, e, sizeof(agent_crt) - 1);
+    else build_cert_path(agent_crt, sizeof(agent_crt), "agent.crt");
+    if ((e = getenv("IG_AGENT_KEY"))) strncpy(agent_key, e, sizeof(agent_key) - 1);
+    else build_cert_path(agent_key, sizeof(agent_key), "agent.key");
+
+    if (!ig_enroll_needed(agent_crt, agent_key)) {
+        fprintf(stderr, "agent: certificate and key already exist. remove them before re-enrollment.\n");
+        return 1;
+    }
+
+    if (read_interactive_value("Enrollment ID: ", enrollment_id, sizeof(enrollment_id), 1) < 0) {
+        fprintf(stderr, "agent: invalid enrollment ID\n");
+        ig_secure_bzero(enrollment_id, sizeof(enrollment_id));
+        return 1;
+    }
+    if (read_interactive_value("XOR Key: ", xor_key, sizeof(xor_key), 0) < 0) {
+        fprintf(stderr, "agent: invalid XOR key\n");
+        ig_secure_bzero(enrollment_id, sizeof(enrollment_id));
+        ig_secure_bzero(xor_key, sizeof(xor_key));
+        return 1;
+    }
+
+    char hostname[256] = {0};
+    char local_ip[64] = {0};
+    get_hostname(hostname, sizeof(hostname));
+    get_local_ip(enroll_host, enroll_port, local_ip, sizeof(local_ip));
+
+    ig_enroll_config_t cfg = {
+        .host = enroll_host,
+        .port = (uint16_t)enroll_port,
+        .ca_crt = ca_crt,
+        .agent_crt = agent_crt,
+        .agent_key = agent_key,
+        .enrollment_id = enrollment_id,
+        .xor_key = xor_key,
+        .hostname = hostname,
+        .ip = local_ip,
+        .os = "Linux",
+        .monitor_type = parse_enroll_monitor_type(),
+    };
+
+    int rc = ig_enroll_execute(&cfg);
+    ig_secure_bzero(enrollment_id, sizeof(enrollment_id));
+    ig_secure_bzero(xor_key, sizeof(xor_key));
+
+    if (rc < 0) {
+        fprintf(stderr, "agent: enrollment failed\n");
+        return 1;
+    }
+    printf("agent: enrollment complete. certificate files saved.\n");
+    return 0;
+}
+
 /* ── 사용법 ────────────────────────────────────── */
 static void print_usage(const char *prog) {
     printf("사용법: %s [옵션]\n\n", prog);
     printf("옵션:\n");
+    printf("\t--enroll\t대화형 최초 등록 수행\n");
     printf("\t-c <path>\t설정 파일 경로 (기본: %s)\n", IG_CONFIG_PATH);
     printf("\t-m <mode>\teBPF 동작 모드 (기본: lock)\n");
     printf("\t\t\t  maintenance  — 감사만 (AUDIT, 차단 없음)\n");
@@ -596,6 +720,11 @@ static void print_usage(const char *prog) {
     printf("\tIG_CA_CRT\tCA 인증서 경로\n");
     printf("\tIG_AGENT_CRT\t에이전트 인증서 경로\n");
     printf("\tIG_AGENT_KEY\t에이전트 개인키 경로\n\n");
+    printf("환경변수 (interactive enrollment):\n");
+    printf("\tIG_ENROLL_HOST\t최초 등록 서버 IP (기본: IG_SERVER_HOST)\n");
+    printf("\tIG_ENROLL_PORT\t최초 등록 서버 포트 (기본: 9443)\n");
+    printf("\tIG_ENROLL_MONITOR_TYPE\t등록 metadata monitor type (lkm, ebpf, fanotify; 기본: lkm)\n");
+    printf("\tEnrollment ID와 XOR Key는 agent --enroll 실행 중 직접 입력\n\n");
 }
 /* ── 메인 ──────────────────────────────────────── */
 int main(int argc, char *argv[]) {
@@ -604,11 +733,20 @@ int main(int argc, char *argv[]) {
     const char *flag_env  = NULL;
     int opt_foreground = 0;
     int opt_verbose    = 0;
+    int opt_enroll     = 0;
     g_ebpf_block = IG_EBPF_BLOCK_DENY;  /* 기본: lock 모드 */
 
+    enum { OPT_ENROLL = 1000 };
+    static const struct option long_options[] = {
+        {"enroll", no_argument, 0, OPT_ENROLL},
+        {"help", no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+
     int opt;
-    while ((opt = getopt(argc, argv, "c:e:m:fvh")) != -1) {
+    while ((opt = getopt_long(argc, argv, "c:e:m:fvh", long_options, NULL)) != -1) {
         switch (opt) {
+            case OPT_ENROLL: opt_enroll = 1; break;
             case 'c': flag_conf = optarg; break;
             case 'e': flag_env  = optarg; break;
             case 'm':
@@ -639,6 +777,10 @@ int main(int argc, char *argv[]) {
 
     /* .env 로드 — 환경변수 우선, .env는 기본값 역할 */
     if (env_path) load_env(env_path);
+
+    if (opt_enroll) {
+        return run_enroll_mode();
+    }
 
     ig_config_t *cfg = calloc(1, sizeof(ig_config_t));
     if (!cfg) { fprintf(stderr, "Out of Memory\n"); return 1; }
@@ -765,7 +907,7 @@ int main(int argc, char *argv[]) {
     const char *port_env = getenv("IG_SERVER_PORT");
     if (port_env) server_port = atoi(port_env);
 
-    char ca_crt[512], agent_crt[512], agent_key[512];
+    char ca_crt[512] = {0}, agent_crt[512] = {0}, agent_key[512] = {0};
     const char *e;
     if ((e = getenv("IG_CA_CRT")))    strncpy(ca_crt,    e, sizeof(ca_crt) - 1);
     else build_cert_path(ca_crt,    sizeof(ca_crt),    "ca.crt");
@@ -784,7 +926,11 @@ int main(int argc, char *argv[]) {
         get_hostname(hostname, sizeof(hostname));
         get_local_ip(server_host, server_port, local_ip, sizeof(local_ip));
 
-        if (tls_context_init(&g_tls_ctx, ca_crt, agent_crt, agent_key) < 0) {
+        int cert_missing = ig_enroll_needed(agent_crt, agent_key);
+        if (cert_missing) {
+            LOG_WARN_IG("[enroll] 인증서 없음 — `agent --enroll`을 먼저 실행해야 transport가 활성화됨");
+            LOG_WARN_IG("[transport] 인증서 누락 — transport 비활성화");
+        } else if (tls_context_init(&g_tls_ctx, ca_crt, agent_crt, agent_key) < 0) {
             LOG_WARN_IG("[transport] TLS 컨텍스트 초기화 실패 — transport 비활성화");
         } else {
             tls_inited = 1;

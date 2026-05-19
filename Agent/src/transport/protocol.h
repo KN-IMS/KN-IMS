@@ -82,12 +82,14 @@ typedef struct {
     uint8_t  detected_by;
     uint32_t pid;
     uint32_t timestamp;
-    /* v2 — target inode 식별 + chain.
-     * 디코더는 wire 끝까지 읽고 남은 바이트가 있으면 v2 필드로 파싱.
-     */
+    /* target inode 식별 + process chain. FILE_EVENT는 항상 이 필드를 포함한다. */
     uint64_t target_dev;
     uint64_t target_ino;
     uint8_t  blocked;
+    uint32_t uid;
+    uint32_t sid;
+    uint16_t comm_len;
+    char    *comm;
     ig_pid_chain_t *chain;   /* not owned; encoder가 직렬화. NULL 가능 */
 } ig_msg_file_event_t;
 

@@ -51,12 +51,17 @@ set(TRANSPORT_SRCS
     src/transport/heartbeat.c
 )
 
+set(ENROLL_SRCS
+    src/enroll/enroll.c
+)
+
 # ── 실행 파일 ──────────────────────────────────
 add_executable(agent
     src/main.c
     ${REALTIME_SRCS}
     ${CORE_SRCS}
     ${TRANSPORT_SRCS}
+    ${ENROLL_SRCS}
     ${SCANNER_SRCS}
     ${EBPF_SRCS}
 )

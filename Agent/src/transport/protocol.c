@@ -224,14 +224,15 @@ static int chain_entry_encode(const ig_proc_info_t *e,
 
 int ig_file_event_encode(const ig_msg_file_event_t *msg, uint8_t *buf, size_t buf_size)
 {
-    /* v1 minimum */
-    size_t need_v1 = 8 + 1
+    /* FILE_EVENT base fields */
+    size_t need_base = 8 + 1
         + 2 + msg->file_path_len
         + 2 + msg->file_name_len
         + 2 + 1 + 4 + 4;
-    /* v2: dev(8)+ino(8)+blocked(1)+chain_depth(1)+chain_truncated(1) */
-    size_t need_v2 = 8 + 8 + 1 + 1 + 1;
-    if (need_v1 + need_v2 > buf_size) return -1;
+    /* target inode + actor fast fields + process chain metadata */
+    size_t need_actor = 8 + 8 + 1 + 4 + 4 + 2 + msg->comm_len;
+    size_t need_chain_meta = 1 + 1;
+    if (need_base + need_actor + need_chain_meta > buf_size) return -1;
 
     uint8_t *p = buf;
     const uint8_t *end = buf + buf_size;
@@ -244,14 +245,17 @@ int ig_file_event_encode(const ig_msg_file_event_t *msg, uint8_t *buf, size_t bu
     write_u32(&p, msg->pid);
     write_u32(&p, msg->timestamp);
 
-    /* v2 — target + chain */
+    /* target + process chain */
     write_u64(&p, msg->target_dev);
     write_u64(&p, msg->target_ino);
     write_u8(&p, msg->blocked);
+    write_u32(&p, msg->uid);
+    write_u32(&p, msg->sid);
+    write_str(&p, msg->comm, msg->comm_len);
     {
         uint8_t depth = 0, trunc = 0;
         if (msg->chain) {
-            depth = (uint8_t)((msg->chain->depth > 255) ? 255 : msg->chain->depth);
+            depth = (uint8_t)((msg->chain->depth > IG_PA_MAX_DEPTH) ? IG_PA_MAX_DEPTH : msg->chain->depth);
             trunc = (uint8_t)(msg->chain->truncated ? 1 : 0);
         }
         write_u8(&p, depth);
@@ -294,6 +298,19 @@ int ig_file_event_decode(const uint8_t *buf, size_t len, ig_msg_file_event_t *ms
     msg->detected_by = read_u8(&p);
     msg->pid = read_u32(&p);
     msg->timestamp = read_u32(&p);
+    if ((size_t)(end - p) < 25) {
+        ig_file_event_free(msg);
+        return -1;
+    }
+    msg->target_dev = read_u64(&p);
+    msg->target_ino = read_u64(&p);
+    msg->blocked = read_u8(&p);
+    msg->uid = read_u32(&p);
+    msg->sid = read_u32(&p);
+    if (read_str(&p, end, &msg->comm, &msg->comm_len) < 0) {
+        ig_file_event_free(msg);
+        return -1;
+    }
     return (int)(p - buf);
 }
 
@@ -301,6 +318,8 @@ void ig_file_event_free(ig_msg_file_event_t *msg)
 {
     free(msg->file_path);
     free(msg->file_name);
+    free(msg->comm);
     msg->file_path = NULL;
     msg->file_name = NULL;
+    msg->comm = NULL;
 }

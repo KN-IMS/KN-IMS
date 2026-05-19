@@ -508,6 +508,10 @@ int ig_tcp_send_event(ig_tcp_client_t *cli, const ig_event_t *ev)
     msg.target_dev = ev->dev;
     msg.target_ino = ev->ino;
     msg.blocked    = (uint8_t)(ev->blocked ? 1 : 0);
+    msg.uid        = (uint32_t)ev->uid;
+    msg.sid        = (uint32_t)ev->sid;
+    msg.comm_len   = (uint16_t)strnlen(ev->comm, sizeof(ev->comm));
+    msg.comm       = (char *)ev->comm;
     msg.chain      = (ig_pid_chain_t *)&ev->chain;   /* not owned */
 
     if (msg.detected_by == 0) {
