@@ -23,16 +23,54 @@ type RegisterPayload struct {
 	MonitorType string // lkm, ebpf
 }
 
+// AgentCertificate : Agent에 binding된 mTLS client certificate 정보
+type AgentCertificate struct {
+	AgentID         string
+	CertSubjectHash string
+	CertFingerprint string
+	IssuedAt        time.Time
+	ExpiresAt       time.Time
+}
+
 // FileEventPayload : 에이전트 -> 서버 파일 변경 이벤트
+type ProcessInfo struct {
+	PID         int
+	PPID        int
+	UID         uint32
+	EUID        uint32
+	SID         int
+	TTY         string
+	Comm        string
+	Exe         string
+	Cmdline     string
+	StartTimeNS uint64
+}
+
 type FileEventPayload struct {
-	AgentID        string
-	EventType      string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
-	FilePath       string
-	FileName       string
-	FilePermission string // "0644"
-	DetectedBy     string // lkm, ebpf
-	Pid            int
-	Timestamp      int64
+	AgentID          string
+	EventType        string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
+	FilePath         string
+	FileName         string
+	FilePermission   string // "0644"
+	DetectedBy       string // lkm, ebpf
+	Pid              int
+	Timestamp        int64
+	TargetDev        uint64
+	TargetIno        uint64
+	Blocked          bool
+	ActorPID         int
+	ActorPPID        int
+	ActorUID         uint32
+	ActorEUID        uint32
+	ActorSID         int
+	ActorTTY         string
+	ActorComm        string
+	ActorExe         string
+	ActorCmdline     string
+	ActorStartTimeNS uint64
+	ChainDepth       int
+	ChainTruncated   bool
+	Chain            []ProcessInfo
 }
 
 // Agent 도메인
@@ -55,6 +93,12 @@ type Agent struct {
 type AgentStore interface {
 	// RegisterAgent : 0x01 REGISTER 수신 -> agent_id 발급 후 DB 저장
 	RegisterAgent(ctx context.Context, agentID string, payload RegisterPayload) error
+	// RegisterAgentWithCertificate : REGISTER 수신 -> Agent 저장 + 인증서 binding 검증/최초 저장
+	RegisterAgentWithCertificate(ctx context.Context, agentID string, payload RegisterPayload, cert AgentCertificate) error
+	// EnsureAgent : enrollment 단계에서 Agent row를 offline 상태로 사전 생성/갱신
+	EnsureAgent(ctx context.Context, agentID string, payload RegisterPayload) error
+	// EnsureAgentCertificate : enrollment 단계에서 발급 인증서를 Agent에 최초 binding
+	EnsureAgentCertificate(ctx context.Context, agentID string, cert AgentCertificate) error
 	// UpdateHeartbeat : 0x02 HEARTBEAT 수신 -> last_seen 갱신
 	UpdateHeartbeat(ctx context.Context, agentID string, t time.Time) error
 	// SetOffline : TCP 연결 종료 -> status offline
@@ -69,20 +113,57 @@ type AgentStore interface {
 	UpdateStatus(ctx context.Context, agentID string, status string) error
 }
 
+// Enrollment : 신규 Agent 최초 등록용 XOR bootstrap 상태
+type Enrollment struct {
+	EnrollmentID  string
+	AgentID       string
+	SecretHash    string
+	KeyCiphertext []byte
+	KeyNonce      []byte
+	Status        string
+	ExpiresAt     time.Time
+	UsedAt        time.Time
+	CreatedAt     time.Time
+}
+
+// EnrollmentStore : enrollment XOR key 생성/소비 관리
+type EnrollmentStore interface {
+	CreateEnrollment(ctx context.Context, enrollment Enrollment) error
+	GetPendingEnrollment(ctx context.Context, enrollmentID string, now time.Time) (Enrollment, error)
+	MarkEnrollmentIssued(ctx context.Context, enrollmentID string, agentID string, now time.Time) error
+	MarkEnrollmentUsed(ctx context.Context, enrollmentID string, agentID string, now time.Time) error
+}
+
 // FileEvent 도메인
 
 // FileEvent : DB에 저장되는 파일 이벤트
 type FileEvent struct {
-	ID             int64
-	AgentID        string
-	EventType      string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
-	FilePath       string
-	FileName       string
-	FilePermission string // "0644"
-	DetectedBy     string // lkm, ebpf
-	Pid            int    // PID를 제공하지 않는 이벤트는 0
-	OccurredAt     time.Time
-	ReceivedAt     time.Time
+	ID               int64
+	AgentID          string
+	EventType        string // CREATE, MODIFY, DELETE, ATTRIB, MOVE
+	FilePath         string
+	FileName         string
+	FilePermission   string // "0644"
+	DetectedBy       string // lkm, ebpf
+	Pid              int    // PID를 제공하지 않는 이벤트는 0
+	TargetDev        uint64
+	TargetIno        uint64
+	Blocked          bool
+	ActorPID         int
+	ActorPPID        int
+	ActorUID         uint32
+	ActorEUID        uint32
+	ActorSID         int
+	ActorTTY         string
+	ActorComm        string
+	ActorExe         string
+	ActorCmdline     string
+	ActorStartTimeNS uint64
+	ChainDepth       int
+	ChainTruncated   bool
+	Chain            []ProcessInfo
+	OccurredAt       time.Time
+	ReceivedAt       time.Time
 }
 
 // EventFilter : GET /api/events 쿼리 파라미터
@@ -147,7 +228,7 @@ type AlertStore interface {
 	ResolveAlert(ctx context.Context, alertID int64) error
 }
 
-// AuthStore : Mirror 모드 콘솔 PIN 해시 저장 (singleton row)
+// AuthStore : 콘솔 PIN 해시 저장 (singleton row)
 // 구현 : internal/store/auth_store.go
 type AuthStore interface {
 	// GetPINHash : 현재 PIN 해시. 미설정 시 ""(nil err) 반환.

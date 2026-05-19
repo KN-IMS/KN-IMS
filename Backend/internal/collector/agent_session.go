@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,31 +15,41 @@ import (
 
 // AgentSession : 연결된 에이전트 1개의 생명주기 관리 -> goroutine으로 병렬 처리
 type AgentSession struct {
-	AgentID  string // uint64 -> 문자열로 변환하여 저장
-	agentNum uint64 // 바이너리 프로토콜의 agent_id (uint64)
-	ctx      context.Context
-	cancel   context.CancelFunc
-	conn     *tls.Conn
-	agents   internal.AgentStore
-	events   internal.EventStore
-	alerts   internal.AlertStore
-	pub      internal.EventPublisher
-	onEvent  func(ctx context.Context, agentID string, e internal.FileEvent)
-	sessions *sync.Map // 서버의 세션 맵 참조 -> 중복 연결 처리 + 검증
-	lastSeq  uint32    // seq_num 검증
+	AgentID         string // uint64 -> 문자열로 변환하여 저장
+	agentNum        uint64 // 바이너리 프로토콜의 agent_id (uint64)
+	certSubject     string
+	certSubjectHash string
+	certFingerprint string
+	certIssuedAt    time.Time
+	certExpiresAt   time.Time
+	ctx             context.Context
+	cancel          context.CancelFunc
+	conn            *tls.Conn
+	agents          internal.AgentStore
+	events          internal.EventStore
+	alerts          internal.AlertStore
+	pub             internal.EventPublisher
+	onEvent         func(ctx context.Context, agentID string, e internal.FileEvent)
+	sessions        *sync.Map // 서버의 세션 맵 참조 -> 중복 연결 처리 + 검증
+	lastSeq         uint32    // seq_num 검증
+}
+
+const agentIdentityPrefix = "spiffe://kn-ig/agent/"
+
+func (s *AgentSession) rejectSession(reason string, attrs ...any) {
+	slog.Warn(reason, attrs...)
+	s.conn.Close()
 }
 
 func (s *AgentSession) validateAgentIdentity(agentNum uint64) bool {
 	if s.agentNum == 0 || s.AgentID == "" {
-		slog.Warn("등록되지 않은 세션의 메시지 수신")
-		s.conn.Close()
+		s.rejectSession("등록되지 않은 세션의 메시지 수신")
 		return false
 	}
 	if agentNum != s.agentNum {
-		slog.Warn("agent_id 불일치 -> 연결 끊음",
+		s.rejectSession("agent_id 불일치 -> 연결 끊음",
 			"session_agent_id", s.AgentID,
 			"payload_agent_id", strconv.FormatUint(agentNum, 10))
-		s.conn.Close()
 		return false
 	}
 	return true
@@ -99,22 +110,30 @@ func (s *AgentSession) Run() {
 
 // handleRegister : 0x01 REGISTER -> agent_id 생성 + DB 저장 + ACK 응답
 func (s *AgentSession) handleRegister(hdr *FrameHeader, payload []byte) {
+	if s.AgentID != "" {
+		s.rejectSession("이미 등록된 세션의 중복 REGISTER 수신 -> 연결 종료", "agent_id", s.AgentID)
+		return
+	}
+
 	reg, err := DecodeRegister(payload)
 	if err != nil {
 		slog.Error("REGISTER 디코딩 실패", "err", err)
 		return
 	}
 
+	if s.certSubjectHash == "" || s.certFingerprint == "" {
+		s.rejectSession("클라이언트 인증서 binding 정보 없음 -> 연결 종료")
+		return
+	}
+
 	s.agentNum = GenerateAgentID(reg.Hostname, reg.IP)
 	s.AgentID = strconv.FormatUint(s.agentNum, 10)
-
-	// 중복 연결 처리 -> 기존 연결 종료
-	if s.sessions != nil {
-		if old, loaded := s.sessions.LoadAndDelete(s.AgentID); loaded {
-			slog.Info("중복 연결 감지 -> 기존 연결 종료", "agent_id", s.AgentID)
-			old.(*tls.Conn).Close()
-		}
-		s.sessions.Store(s.AgentID, s.conn)
+	if !s.certificateIdentityMatchesAgent() {
+		s.rejectSession("인증서 identity와 REGISTER agent_id 불일치 -> 등록 거부",
+			"agent_id", s.AgentID,
+			"cert_subject", s.certSubject,
+		)
+		return
 	}
 
 	// DB 저장
@@ -124,9 +143,33 @@ func (s *AgentSession) handleRegister(hdr *FrameHeader, payload []byte) {
 		OS:          reg.OS,
 		MonitorType: MonitorTypeName(reg.MonitorType),
 	}
-	if err := s.agents.RegisterAgent(s.ctx, s.AgentID, p); err != nil {
-		slog.Error("RegisterAgent 실패", "err", err)
+	cert := internal.AgentCertificate{
+		AgentID:         s.AgentID,
+		CertSubjectHash: s.certSubjectHash,
+		CertFingerprint: s.certFingerprint,
+		IssuedAt:        s.certIssuedAt,
+		ExpiresAt:       s.certExpiresAt,
+	}
+	if err := s.agents.RegisterAgentWithCertificate(s.ctx, s.AgentID, p, cert); err != nil {
+		if err == internal.ErrAgentCertificateMismatch {
+			s.rejectSession("인증서 fingerprint/subject hash 불일치 -> 등록 거부",
+				"agent_id", s.AgentID,
+				"cert_subject", s.certSubject,
+				"cert_fingerprint", s.certFingerprint,
+			)
+			return
+		}
+		slog.Error("RegisterAgentWithCertificate 실패", "err", err)
 		return
+	}
+
+	// 중복 연결 처리 -> 인증서 binding 검증을 통과한 연결만 기존 세션을 교체한다.
+	if s.sessions != nil {
+		if old, loaded := s.sessions.LoadAndDelete(s.AgentID); loaded {
+			slog.Info("중복 연결 감지 -> 기존 연결 종료", "agent_id", s.AgentID)
+			old.(*tls.Conn).Close()
+		}
+		s.sessions.Store(s.AgentID, s.conn)
 	}
 
 	// ACK 전송
@@ -135,7 +178,14 @@ func (s *AgentSession) handleRegister(hdr *FrameHeader, payload []byte) {
 		slog.Error("REGISTER ACK 전송 실패", "err", err)
 	}
 
-	slog.Info("에이전트 등록", "agent_id", s.AgentID, "hostname", reg.Hostname, "ip", reg.IP.String())
+	slog.Info("에이전트 등록", "agent_id", s.AgentID, "hostname", reg.Hostname, "ip", reg.IP.String(), "cert_subject", s.certSubject)
+}
+
+func (s *AgentSession) certificateIdentityMatchesAgent() bool {
+	if s.certSubject == "" || !strings.HasPrefix(s.certSubject, agentIdentityPrefix) {
+		return true
+	}
+	return strings.TrimPrefix(s.certSubject, agentIdentityPrefix) == s.AgentID
 }
 
 // handleHeartbeat : 0x02 HEARTBEAT -> last_seen 갱신
@@ -167,17 +217,43 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 	}
 
 	agentID := strconv.FormatUint(ev.AgentID, 10)
+	chain := convertProcessChain(ev.Chain.Entries)
+	actor := internal.ProcessInfo{
+		PID:  int(ev.Pid),
+		UID:  ev.UID,
+		SID:  int(ev.SID),
+		Comm: ev.Comm,
+	}
+	if len(chain) > 0 {
+		actor = chain[0]
+	}
 
 	// 바이너리 -> internal 타입 변환
 	p := internal.FileEventPayload{
-		AgentID:        agentID,
-		EventType:      EventTypeName(ev.EventType),
-		FilePath:       ev.FilePath,
-		FileName:       ev.FileName,
-		FilePermission: PermString(ev.FilePermission),
-		DetectedBy:     MonitorTypeName(ev.DetectedBy),
-		Pid:            int(ev.Pid),
-		Timestamp:      int64(ev.Timestamp),
+		AgentID:          agentID,
+		EventType:        EventTypeName(ev.EventType),
+		FilePath:         ev.FilePath,
+		FileName:         ev.FileName,
+		FilePermission:   PermString(ev.FilePermission),
+		DetectedBy:       MonitorTypeName(ev.DetectedBy),
+		Pid:              int(ev.Pid),
+		Timestamp:        int64(ev.Timestamp),
+		TargetDev:        ev.TargetDev,
+		TargetIno:        ev.TargetIno,
+		Blocked:          ev.Blocked,
+		ActorPID:         actor.PID,
+		ActorPPID:        actor.PPID,
+		ActorUID:         actor.UID,
+		ActorEUID:        actor.EUID,
+		ActorSID:         actor.SID,
+		ActorTTY:         actor.TTY,
+		ActorComm:        actor.Comm,
+		ActorExe:         actor.Exe,
+		ActorCmdline:     actor.Cmdline,
+		ActorStartTimeNS: actor.StartTimeNS,
+		ChainDepth:       int(ev.Chain.Depth),
+		ChainTruncated:   ev.Chain.Truncated,
+		Chain:            chain,
 	}
 
 	// DB 저장
@@ -188,14 +264,30 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 
 	// SSE 실시간 push
 	e := internal.FileEvent{
-		AgentID:        agentID,
-		EventType:      p.EventType,
-		FilePath:       p.FilePath,
-		FileName:       p.FileName,
-		FilePermission: p.FilePermission,
-		DetectedBy:     p.DetectedBy,
-		Pid:            p.Pid,
-		OccurredAt:     time.Unix(p.Timestamp, 0),
+		AgentID:          agentID,
+		EventType:        p.EventType,
+		FilePath:         p.FilePath,
+		FileName:         p.FileName,
+		FilePermission:   p.FilePermission,
+		DetectedBy:       p.DetectedBy,
+		Pid:              p.Pid,
+		TargetDev:        p.TargetDev,
+		TargetIno:        p.TargetIno,
+		Blocked:          p.Blocked,
+		ActorPID:         p.ActorPID,
+		ActorPPID:        p.ActorPPID,
+		ActorUID:         p.ActorUID,
+		ActorEUID:        p.ActorEUID,
+		ActorSID:         p.ActorSID,
+		ActorTTY:         p.ActorTTY,
+		ActorComm:        p.ActorComm,
+		ActorExe:         p.ActorExe,
+		ActorCmdline:     p.ActorCmdline,
+		ActorStartTimeNS: p.ActorStartTimeNS,
+		ChainDepth:       p.ChainDepth,
+		ChainTruncated:   p.ChainTruncated,
+		Chain:            p.Chain,
+		OccurredAt:       time.Unix(p.Timestamp, 0),
 	}
 	s.pub.Publish(e)
 
@@ -203,4 +295,26 @@ func (s *AgentSession) handleFileEvent(payload []byte) {
 	if s.onEvent != nil {
 		s.onEvent(s.ctx, agentID, e)
 	}
+}
+
+func convertProcessChain(entries []ProcessInfoMsg) []internal.ProcessInfo {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]internal.ProcessInfo, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, internal.ProcessInfo{
+			PID:         int(e.PID),
+			PPID:        int(e.PPID),
+			UID:         e.UID,
+			EUID:        e.EUID,
+			SID:         int(e.SID),
+			TTY:         e.TTY,
+			Comm:        e.Comm,
+			Exe:         e.Exe,
+			Cmdline:     e.Cmdline,
+			StartTimeNS: e.StartTimeNS,
+		})
+	}
+	return out
 }

@@ -74,14 +74,38 @@ func (s *Server) handleConn(conn *tls.Conn) {
 	}
 	conn.SetDeadline(time.Time{}) // 타임아웃 해제
 
+	certSubject, err := ExtractPeerIdentity(conn)
+	if err != nil {
+		slog.Warn("클라이언트 인증서 identity 추출 실패", "err", err)
+		conn.Close()
+		return
+	}
+	certFingerprint, err := ExtractPeerFingerprint(conn)
+	if err != nil {
+		slog.Warn("클라이언트 인증서 fingerprint 추출 실패", "err", err)
+		conn.Close()
+		return
+	}
+	certIssuedAt, certExpiresAt, err := ExtractPeerValidity(conn)
+	if err != nil {
+		slog.Warn("클라이언트 인증서 유효기간 추출 실패", "err", err)
+		conn.Close()
+		return
+	}
+
 	session := &AgentSession{
-		conn:     conn,
-		agents:   s.agents,
-		events:   s.events,
-		alerts:   s.alerts,
-		pub:      s.pub,
-		onEvent:  s.onEvent,
-		sessions: &s.sessions,
+		conn:            conn,
+		certSubject:     certSubject,
+		certSubjectHash: SubjectHash(certSubject),
+		certFingerprint: certFingerprint,
+		certIssuedAt:    certIssuedAt,
+		certExpiresAt:   certExpiresAt,
+		agents:          s.agents,
+		events:          s.events,
+		alerts:          s.alerts,
+		pub:             s.pub,
+		onEvent:         s.onEvent,
+		sessions:        &s.sessions,
 	}
 
 	session.Run()

@@ -14,6 +14,8 @@ const (
 	MaxFrameSize    = 65535
 )
 
+const MaxProcessChainDepth = 16
+
 // 메시지 Type
 
 const (
@@ -90,6 +92,32 @@ type FileEventMsg struct {
 	DetectedBy     uint8
 	Pid            uint32
 	Timestamp      uint32
+	TargetDev      uint64
+	TargetIno      uint64
+	Blocked        bool
+	UID            uint32
+	SID            uint32
+	Comm           string
+	Chain          ProcessChainMsg
+}
+
+type ProcessInfoMsg struct {
+	PID         uint32
+	PPID        uint32
+	UID         uint32
+	EUID        uint32
+	SID         uint32
+	StartTimeNS uint64
+	Comm        string
+	TTY         string
+	Exe         string
+	Cmdline     string
+}
+
+type ProcessChainMsg struct {
+	Depth     uint8
+	Truncated bool
+	Entries   []ProcessInfoMsg
 }
 
 // 바이너리 읽기 헬퍼
@@ -352,6 +380,57 @@ func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
 	if err != nil {
 		return nil, err
 	}
+	targetDev, err := r.readU64()
+	if err != nil {
+		return nil, fmt.Errorf("target_dev 읽기 실패: %w", err)
+	}
+	targetIno, err := r.readU64()
+	if err != nil {
+		return nil, fmt.Errorf("target_ino 읽기 실패: %w", err)
+	}
+	blocked, err := r.readU8()
+	if err != nil {
+		return nil, fmt.Errorf("blocked 읽기 실패: %w", err)
+	}
+	uid, err := r.readU32()
+	if err != nil {
+		return nil, fmt.Errorf("uid 읽기 실패: %w", err)
+	}
+	sid, err := r.readU32()
+	if err != nil {
+		return nil, fmt.Errorf("sid 읽기 실패: %w", err)
+	}
+	comm, err := r.readStr()
+	if err != nil {
+		return nil, fmt.Errorf("comm 읽기 실패: %w", err)
+	}
+	chainDepth, err := r.readU8()
+	if err != nil {
+		return nil, fmt.Errorf("chain_depth 읽기 실패: %w", err)
+	}
+	if chainDepth > MaxProcessChainDepth {
+		return nil, fmt.Errorf("chain_depth 초과: %d > %d", chainDepth, MaxProcessChainDepth)
+	}
+	chainTruncated, err := r.readU8()
+	if err != nil {
+		return nil, fmt.Errorf("chain_truncated 읽기 실패: %w", err)
+	}
+
+	chain := ProcessChainMsg{
+		Depth:     chainDepth,
+		Truncated: chainTruncated != 0,
+		Entries:   make([]ProcessInfoMsg, 0, chainDepth),
+	}
+	for i := 0; i < int(chainDepth); i++ {
+		entry, err := decodeProcessInfo(r)
+		if err != nil {
+			return nil, fmt.Errorf("chain[%d] 디코딩 실패: %w", i, err)
+		}
+		chain.Entries = append(chain.Entries, entry)
+	}
+	if r.remaining() != 0 {
+		return nil, fmt.Errorf("FILE_EVENT payload trailing bytes: %d", r.remaining())
+	}
 
 	return &FileEventMsg{
 		AgentID:        agentID,
@@ -362,6 +441,68 @@ func DecodeFileEvent(data []byte) (*FileEventMsg, error) {
 		DetectedBy:     detectedBy,
 		Pid:            pid,
 		Timestamp:      timestamp,
+		TargetDev:      targetDev,
+		TargetIno:      targetIno,
+		Blocked:        blocked != 0,
+		UID:            uid,
+		SID:            sid,
+		Comm:           comm,
+		Chain:          chain,
+	}, nil
+}
+
+func decodeProcessInfo(r *binReader) (ProcessInfoMsg, error) {
+	pid, err := r.readU32()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	ppid, err := r.readU32()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	uid, err := r.readU32()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	euid, err := r.readU32()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	sid, err := r.readU32()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	startTimeNS, err := r.readU64()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	comm, err := r.readStr()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	tty, err := r.readStr()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	exe, err := r.readStr()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	cmdline, err := r.readStr()
+	if err != nil {
+		return ProcessInfoMsg{}, err
+	}
+	return ProcessInfoMsg{
+		PID:         pid,
+		PPID:        ppid,
+		UID:         uid,
+		EUID:        euid,
+		SID:         sid,
+		StartTimeNS: startTimeNS,
+		Comm:        comm,
+		TTY:         tty,
+		Exe:         exe,
+		Cmdline:     cmdline,
 	}, nil
 }
 

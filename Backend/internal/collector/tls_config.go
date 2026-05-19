@@ -1,10 +1,13 @@
 package collector
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"time"
 )
 
 // NewTLSConfig : mTLS 서버 설정 생성
@@ -45,4 +48,52 @@ func ExtractCN(conn *tls.Conn) (string, error) {
 		return "", fmt.Errorf("에이전트 인증서 없음")
 	}
 	return state.PeerCertificates[0].Subject.CommonName, nil
+}
+
+// ExtractPeerIdentity : SAN URI 우선, 없으면 CN을 사용해 에이전트 인증서 identity 추출
+func ExtractPeerIdentity(conn *tls.Conn) (string, error) {
+	state := conn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return "", fmt.Errorf("에이전트 인증서 없음")
+	}
+	return peerIdentityFromCert(state.PeerCertificates[0])
+}
+
+// ExtractPeerFingerprint : 에이전트 인증서 DER 바이트의 SHA-256 fingerprint
+func ExtractPeerFingerprint(conn *tls.Conn) (string, error) {
+	state := conn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return "", fmt.Errorf("에이전트 인증서 없음")
+	}
+	sum := sha256.Sum256(state.PeerCertificates[0].Raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// ExtractPeerValidity : 에이전트 인증서 유효 기간 추출
+func ExtractPeerValidity(conn *tls.Conn) (time.Time, time.Time, error) {
+	state := conn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return time.Time{}, time.Time{}, fmt.Errorf("에이전트 인증서 없음")
+	}
+	cert := state.PeerCertificates[0]
+	return cert.NotBefore, cert.NotAfter, nil
+}
+
+// SubjectHash : 인증서 identity 문자열의 SHA-256 해시 반환
+func SubjectHash(identity string) string {
+	sum := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(sum[:])
+}
+
+func peerIdentityFromCert(cert *x509.Certificate) (string, error) {
+	if cert == nil {
+		return "", fmt.Errorf("에이전트 인증서 없음")
+	}
+	if len(cert.URIs) > 0 {
+		return cert.URIs[0].String(), nil
+	}
+	if cert.Subject.CommonName != "" {
+		return cert.Subject.CommonName, nil
+	}
+	return "", fmt.Errorf("에이전트 인증서에 SAN URI 또는 CN이 없음")
 }

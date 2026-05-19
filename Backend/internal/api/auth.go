@@ -1,6 +1,6 @@
 package api
 
-// Mirror Server 모드 콘솔 PIN 인증.
+// 콘솔 PIN 인증.
 //
 // 토큰: 32B 랜덤 hex(64자), 인메모리 (재시작 시 무효)
 // 잠금: 10회 연속 실패 -> 5분 잠금
@@ -32,8 +32,8 @@ const (
 	lockoutWindow = 5 * time.Minute
 )
 
-// MirrorAuth : Mirror 모드 PIN 인증 핸들러
-type MirrorAuth struct {
+// PINAuth : 콘솔 PIN 인증 핸들러
+type PINAuth struct {
 	store internal.AuthStore
 
 	sessMu   sync.RWMutex
@@ -44,9 +44,9 @@ type MirrorAuth struct {
 	lockedUntil time.Time
 }
 
-// NewMirrorAuth : MirrorAuth 생성
-func NewMirrorAuth(store internal.AuthStore) *MirrorAuth {
-	return &MirrorAuth{
+// NewPINAuth : PINAuth 생성
+func NewPINAuth(store internal.AuthStore) *PINAuth {
+	return &PINAuth{
 		store:    store,
 		sessions: make(map[string]time.Time),
 	}
@@ -57,7 +57,7 @@ type pinBody struct {
 }
 
 // Status : GET /auth/status
-func (a *MirrorAuth) Status(c *gin.Context) {
+func (a *PINAuth) Status(c *gin.Context) {
 	hash, err := a.store.GetPINHash(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -73,7 +73,7 @@ func (a *MirrorAuth) Status(c *gin.Context) {
 }
 
 // Setup : POST /auth/setup (최초 PIN 설정)
-func (a *MirrorAuth) Setup(c *gin.Context) {
+func (a *PINAuth) Setup(c *gin.Context) {
 	var body pinBody
 	if err := c.ShouldBindJSON(&body); err != nil || !validPin(body.Pin) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "pin must be 4-8 digits"})
@@ -103,7 +103,7 @@ func (a *MirrorAuth) Setup(c *gin.Context) {
 }
 
 // Login : POST /auth/login
-func (a *MirrorAuth) Login(c *gin.Context) {
+func (a *PINAuth) Login(c *gin.Context) {
 	if a.isLocked() {
 		c.JSON(http.StatusLocked, gin.H{"error": "too many failed attempts, try later"})
 		return
@@ -134,7 +134,7 @@ func (a *MirrorAuth) Login(c *gin.Context) {
 }
 
 // Authorize : /api/* 진입 미들웨어. Bearer 토큰 검증.
-func (a *MirrorAuth) Authorize(c *gin.Context) {
+func (a *PINAuth) Authorize(c *gin.Context) {
 	h := c.GetHeader("Authorization")
 	if !strings.HasPrefix(h, "Bearer ") {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
@@ -158,7 +158,7 @@ func (a *MirrorAuth) Authorize(c *gin.Context) {
 	c.Next()
 }
 
-func (a *MirrorAuth) issue() string {
+func (a *PINAuth) issue() string {
 	var b [32]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		// crypto/rand 실패는 시스템 단위 장애. 패닉이 합리적.
@@ -171,13 +171,13 @@ func (a *MirrorAuth) issue() string {
 	return tok
 }
 
-func (a *MirrorAuth) isLocked() bool {
+func (a *PINAuth) isLocked() bool {
 	a.failMu.Lock()
 	defer a.failMu.Unlock()
 	return time.Now().Before(a.lockedUntil)
 }
 
-func (a *MirrorAuth) recordFailure() {
+func (a *PINAuth) recordFailure() {
 	a.failMu.Lock()
 	defer a.failMu.Unlock()
 	a.failCount++
@@ -187,7 +187,7 @@ func (a *MirrorAuth) recordFailure() {
 	}
 }
 
-func (a *MirrorAuth) resetFailures() {
+func (a *PINAuth) resetFailures() {
 	a.failMu.Lock()
 	a.failCount = 0
 	a.lockedUntil = time.Time{}

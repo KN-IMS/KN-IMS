@@ -14,16 +14,16 @@ type Server struct {
 	eventStore internal.EventStore
 	alertStore internal.AlertStore
 	publisher  internal.EventPublisher
-	auth       *MirrorAuth // nil이면 인증 비활성 (central 모드)
+	auth       *PINAuth
 }
 
-// NewServer : 서버 생성. auth가 nil이면 /auth/* 미등록, /api/* 미들웨어 미적용.
+// NewServer : 서버 생성. PIN 인증 endpoint와 /api/* 보호 미들웨어를 등록한다.
 func NewServer(
 	agentStore internal.AgentStore,
 	eventStore internal.EventStore,
 	alertStore internal.AlertStore,
 	publisher internal.EventPublisher,
-	auth *MirrorAuth,
+	auth *PINAuth,
 ) *Server {
 	router := gin.Default()
 	router.Use(corsMiddleware())
@@ -45,7 +45,7 @@ func NewServer(
 // registerRoutes : API 엔드포인트 등록
 func (s *Server) registerRoutes() {
 	if s.auth != nil {
-		// Mirror 모드: 인증 endpoint (자체적으로 인증 불필요)
+		// 인증 endpoint는 PIN setup/login/status를 위해 공개한다.
 		authGrp := s.router.Group("/auth")
 		authGrp.GET("/status", s.auth.Status)
 		authGrp.POST("/setup", s.auth.Setup)

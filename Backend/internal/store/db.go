@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/KN-IG/KN-IG/Backend/internal/config"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
 )
 
 // DB : MySQL 커넥션 풀 래퍼
@@ -17,7 +17,9 @@ type DB struct {
 // NewDB : .env 파일에서 DATABASE_URL 읽어 MySQL 연결
 func NewDB() (*DB, error) {
 	// .env 파일 로드
-	godotenv.Load()
+	if err := config.LoadEnv(); err != nil {
+		return nil, fmt.Errorf(".env 로드 실패: %w", err)
+	}
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
